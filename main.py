@@ -33,403 +33,48 @@ from fastapi.responses import HTMLResponse, JSONResponse
 # ─────────────────────────────────────────────────────────────────────────────
 # SECTION 1: CONSTANTS & CONFIGURATION
 # ─────────────────────────────────────────────────────────────────────────────
-# All values below can be overridden via environment variables for Docker /
-# cloud deployment. The defaults match the original hardcoded values so the
-# game works identically without any env vars set.
+# All configuration has moved into the `optimus` package for clarity and
+# testability; the names are re-exported here to keep the rest of this
+# module unchanged during the ongoing refactor.
+#
+#   optimus.config    — env-backed runtime settings (fails fast on missing secrets)
+#   optimus.constants — pure data: market zones, interconnectors, events, duck curve
+# ─────────────────────────────────────────────────────────────────────────────
 
-# Class password — every student uses this same password to join.
-# Change this for your class. It's intentionally simple for classroom use.
-CLASS_PASSWORD = os.environ.get("OPTIMUS_CLASS_PASSWORD", "trade2026")
-
-# Admin secret for the /admin/reset endpoint (passed as query param ?key=...)
-ADMIN_KEY = os.environ.get("OPTIMUS_ADMIN_KEY", "optimus_admin_2026")
-
-# Battery specs — a single massive grid-scale battery
-BATTERY_MAX_MWH = int(
-    os.environ.get("OPTIMUS_BATTERY_MAX_MWH", "50000")
-)  # 50 GWh total capacity
-BATTERY_MAX_MW = int(
-    os.environ.get("OPTIMUS_BATTERY_MAX_MW", "10000")
-)  # 10 GW max charge/discharge rate per hour
-BATTERY_START_MWH = int(
-    os.environ.get("OPTIMUS_BATTERY_START_MWH", "25000")
-)  # Start at 50% state of charge
-
-# ── Battery physics (realistic constraints) ──
-# Round-trip efficiency: 90% total.  Split symmetrically as sqrt(0.90) per leg.
-#   Charge:    grid_mwh × CHARGE_EFF  → stored in battery
-#   Discharge: battery_mwh × DISCHARGE_EFF → sold to grid
-BATTERY_ROUND_TRIP_EFF = 0.90
-BATTERY_CHARGE_EFF = 0.90**0.5  # ~0.9487 — loss on charging
-BATTERY_DISCHARGE_EFF = 0.90**0.5  # ~0.9487 — loss on discharging
-
-# Self-discharge: tiny energy leak every tick (hour).
-# 0.02% per hour ≈ 0.48% per day — realistic for Li-ion grid storage.
-BATTERY_SELF_DISCHARGE_RATE = 0.0002
-
-# SoC-dependent charge taper: real Li-ion batteries slow charging above ~80%.
-# Below taper_start → full rate.  At 100% SoC → rate is multiplied by taper_min.
-BATTERY_SOC_TAPER_START = 0.80  # Taper kicks in above 80% SoC
-BATTERY_SOC_TAPER_MIN_MULT = 0.20  # At 100% SoC, charge rate = 20% of max
-
-# Degradation: battery loses capacity with each equivalent full cycle.
-# SoH declines linearly from 1.0 → EOL_SOH over CYCLE_LIFE full cycles.
-# After EOL, the battery still works but at reduced capacity.
-BATTERY_CYCLE_LIFE = 5000  # Equivalent full cycles to reach EOL
-BATTERY_EOL_SOH = 0.70  # 70% SoH = end of useful life
-BATTERY_START_SOH = 1.0  # All players start at 100%
-
-# Efficiency also degrades slightly with age:
-#   RT_eff(soh) = base_RT_eff × (0.90 + 0.10 × soh)
-# At SoH=1.0 → 90% × 1.0 = 90%.  At SoH=0.70 → 90% × 0.97 = 87.3%.
-BATTERY_EFF_DEGRADATION_FACTOR = 0.10  # 10% of efficiency linked to SoH
-
-# Starting cash for each player (EUR)
-STARTING_CASH = float(os.environ.get("OPTIMUS_STARTING_CASH", "0.0"))
-
-# Reference price used to value the starting battery for mark-to-market PnL.
-# At game start every player holds BATTERY_START_MWH at this price, so their
-# initial MTM PnL = cash + battery_value - initial_value = 0.
-#   MTM PnL = cash + (battery_mwh × current_DE_price) - (BATTERY_START_MWH × STARTING_REF_PRICE)
-# This reference never changes — it's an accounting anchor.
-STARTING_REF_PRICE = float(
-    os.environ.get("OPTIMUS_STARTING_REF_PRICE", "45.0")
-)  # Must match ZONES["DE"]["base_price"]
-
-# Tick timing: 1 real second = 1 in-game hour
-TICK_INTERVAL_SECONDS = float(os.environ.get("OPTIMUS_TICK_INTERVAL", "1.0"))
-
-# ── Rate Limiting ──
-# Max trades per player within the rate-limit window (seconds).
-# Applies to both WebSocket and REST trade endpoints.
-TRADE_RATE_LIMIT = int(os.environ.get("OPTIMUS_TRADE_RATE_LIMIT", "2"))
-TRADE_RATE_WINDOW = float(os.environ.get("OPTIMUS_TRADE_RATE_WINDOW", "1.0"))
-
-# Database file path (SQLite) — anchored to the script's directory so the
-# same DB is used regardless of the working directory when starting the server.
-DB_PATH = os.environ.get(
-    "OPTIMUS_DB_PATH", str(Path(__file__).resolve().parent / "battery_trader.db")
+from optimus.config import (  # noqa: E402  (re-exports preserve legacy import paths)
+    ADMIN_KEY,
+    BATTERY_CHARGE_EFF,
+    BATTERY_CYCLE_LIFE,
+    BATTERY_DISCHARGE_EFF,
+    BATTERY_EFF_DEGRADATION_FACTOR,
+    BATTERY_EOL_SOH,
+    BATTERY_MAX_MW,
+    BATTERY_MAX_MWH,
+    BATTERY_ROUND_TRIP_EFF,
+    BATTERY_SELF_DISCHARGE_RATE,
+    BATTERY_SOC_TAPER_MIN_MULT,
+    BATTERY_SOC_TAPER_START,
+    BATTERY_START_MWH,
+    BATTERY_START_SOH,
+    CLASS_PASSWORD,
+    DA_CLEARING_HOUR,
+    DB_PATH,
+    STARTING_CASH,
+    STARTING_REF_PRICE,
+    TICK_INTERVAL_SECONDS,
+    TRADE_RATE_LIMIT,
+    TRADE_RATE_WINDOW,
 )
-
-# ─────────────────────────────────────────────────────────────────────────────
-# DAY-AHEAD MARKET CONFIGURATION
-# ─────────────────────────────────────────────────────────────────────────────
-# The Day-Ahead (DA) market clears once per day in a single batch auction.
-# In real European markets, the DA auction (operated by EPEX SPOT) clears at
-# 12:00 CET for delivery the following day (24 hourly products).
-#
-# Simplified for the game:
-#   - Players submit bids (price + MW) for the next day's average price
-#   - At DA_CLEARING_HOUR, all bids are matched against the DA clearing price
-#   - DA clearing price = average of forecasted prices for the next 24 hours
-#   - Bids to BUY below the clearing price execute (player wanted cheap power, got it)
-#   - Bids to SELL above the clearing price execute (player wanted expensive, got it)
-#
-# This teaches students the difference between:
-#   DA market: slower, smoother, based on forecasts (less risky, less reward)
-#   Intraday: faster, volatile, based on actuals (more risky, more reward)
-# ─────────────────────────────────────────────────────────────────────────────
-DA_CLEARING_HOUR = 12  # Hour at which the DA auction clears
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SECTION 2: MARKET ZONE DEFINITIONS
-# ─────────────────────────────────────────────────────────────────────────────
-# Each zone represents a country's electricity market with its own generation
-# mix. The key parameters that drive each zone's price behavior:
-#
-#   base_price:        Average price in EUR/MWh under normal conditions
-#   wind_sensitivity:  How much wind generation pushes price DOWN (merit order)
-#   solar_sensitivity: How much solar generation pushes price DOWN
-#   demand_elasticity: How much demand swings affect price
-#   wind_volatility:   How wildly wind speed changes (Ornstein-Uhlenbeck σ)
-#   wind_mean:         Long-term average wind speed (m/s)
-#   peak_demand_gw:    Approximate peak demand for zone sizing
-#
-# Educational note: These values are simplified but directionally correct.
-# France really is nuclear-dominated (stable prices), Denmark really is
-# wind-dominated (volatile prices), Poland really is coal-heavy (expensive).
-# ─────────────────────────────────────────────────────────────────────────────
-
-ZONES: dict[str, dict[str, Any]] = {
-    "DE": {
-        "name": "Germany",
-        "base_price": 45.0,  # EUR/MWh — balanced mix (wind+solar+gas+coal)
-        "wind_sensitivity": 12.0,  # High — significant wind capacity (60+ GW)
-        "solar_sensitivity": 10.0,  # Medium-high — significant solar (~60 GW)
-        "demand_elasticity": 35.0,  # High — large industrial demand swings
-        "wind_volatility": 2.5,  # Moderate variability
-        "wind_mean": 6.0,  # m/s average wind speed
-        "peak_demand_gw": 80.0,  # ~80 GW peak
-        "latitude": 51.0,  # For solar calculation
-    },
-    "FR": {
-        "name": "France",
-        "base_price": 50.0,  # EUR/MWh — nuclear baseload is cheap but inflexible
-        "wind_sensitivity": 3.0,  # Low — limited wind capacity
-        "solar_sensitivity": 4.0,  # Low — some solar in the south
-        "demand_elasticity": 20.0,  # Medium — electric heating causes demand spikes
-        "wind_volatility": 1.5,  # Low variability
-        "wind_mean": 5.0,
-        "peak_demand_gw": 90.0,  # ~90 GW peak (lots of electric heating)
-        "latitude": 47.0,
-    },
-    "NL": {
-        "name": "Netherlands",
-        "base_price": 55.0,  # EUR/MWh — gas-heavy generation is expensive
-        "wind_sensitivity": 8.0,  # Medium — growing offshore wind
-        "solar_sensitivity": 5.0,  # Medium — decent solar for the latitude
-        "demand_elasticity": 30.0,  # High — gas plants are the marginal unit
-        "wind_volatility": 3.0,  # High — North Sea wind is gusty
-        "wind_mean": 7.0,  # Strong coastal winds
-        "peak_demand_gw": 20.0,
-        "latitude": 52.0,
-    },
-    "DK": {
-        "name": "Denmark",
-        "base_price": 40.0,  # EUR/MWh — lots of cheap wind
-        "wind_sensitivity": 20.0,  # VERY HIGH — wind is >50% of generation
-        "solar_sensitivity": 2.0,  # Low — not much solar this far north
-        "demand_elasticity": 15.0,  # Low — small market, less industrial swing
-        "wind_volatility": 4.0,  # Very volatile — North Sea storms
-        "wind_mean": 8.0,  # Strongest average wind
-        "peak_demand_gw": 6.0,  # Small market
-        "latitude": 56.0,
-    },
-    "PL": {
-        "name": "Poland",
-        "base_price": 60.0,  # EUR/MWh — coal-dominated, high CO2 costs
-        "wind_sensitivity": 5.0,  # Low-medium — growing but still small
-        "solar_sensitivity": 3.0,  # Low
-        "demand_elasticity": 25.0,  # Medium
-        "wind_volatility": 2.0,  # Low
-        "wind_mean": 5.5,
-        "peak_demand_gw": 25.0,
-        "latitude": 52.0,
-    },
-}
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SECTION 3: INTERCONNECTOR DEFINITIONS
-# ─────────────────────────────────────────────────────────────────────────────
-# Interconnectors are the physical transmission lines (HVDC cables, AC ties)
-# between countries. Each has a hard capacity limit in GW.
-#
-# MARKET COUPLING THEORY (simplified for students):
-# ─────────────────────────────────────────────────
-# In a perfect market with infinite interconnection, all zones would have
-# the same price (law of one price). But transmission lines have limited
-# capacity. When power flows from a cheap zone to an expensive zone and
-# hits the capacity limit, a "bottleneck" or "congestion" occurs.
-#
-# Result of congestion:
-#   - The cheap zone stays cheap (surplus power is trapped)
-#   - The expensive zone stays expensive (can't import enough)
-#   - The price DIFFERENCE between zones is called the "congestion rent"
-#   - In real markets, TSOs (Transmission System Operators) earn this rent
-#
-# This is the KEY strategic insight for players:
-#   If Denmark has a wind storm (prices crash to €0 or negative), cheap
-#   Danish power will flow into Germany via the DE-DK interconnector.
-#   BUT if the flow hits the 2.5 GW max capacity, the cheap power is
-#   TRAPPED in Denmark, and German prices stay high. Players who
-#   understand this can make better trading decisions.
-#
-# Real-world capacities are approximate (NTC values vary by season/direction).
-# ─────────────────────────────────────────────────────────────────────────────
-
-INTERCONNECTORS: dict[str, dict[str, Any]] = {
-    "DE-FR": {
-        "zones": ("DE", "FR"),
-        "max_capacity_mw": 4000,  # 4.0 GW — large cross-border capacity
-        "flow_sensitivity": 150.0,  # MW per EUR/MWh price difference
-    },
-    "DE-NL": {
-        "zones": ("DE", "NL"),
-        "max_capacity_mw": 3500,  # 3.5 GW
-        "flow_sensitivity": 120.0,
-    },
-    "DE-DK": {
-        "zones": ("DE", "DK"),
-        "max_capacity_mw": 2500,  # 2.5 GW — the bottleneck students will learn about
-        "flow_sensitivity": 100.0,
-    },
-    "DE-PL": {
-        "zones": ("DE", "PL"),
-        "max_capacity_mw": 3000,  # 3.0 GW
-        "flow_sensitivity": 130.0,
-    },
-}
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SECTION 4: DUCK CURVE — 24-HOUR DEMAND PROFILES
-# ─────────────────────────────────────────────────────────────────────────────
-# The "duck curve" describes how NET demand (total demand minus solar
-# generation) looks over a day in a solar-heavy grid:
-#
-#   1. Morning ramp (6am-9am): People wake up, demand rises
-#   2. Midday belly (10am-2pm): Solar floods the grid, net demand DROPS
-#   3. Evening ramp (4pm-8pm): Solar disappears, demand peaks → price spike
-#   4. Night trough (10pm-5am): Low demand, low prices
-#
-# This creates a duck-shaped curve that drives daily price patterns.
-# Values below are multipliers on each zone's peak demand (0.0 to 1.0).
-# ─────────────────────────────────────────────────────────────────────────────
-
-# Hour: 0     1     2     3     4     5     6     7     8     9    10    11
-#      12    13    14    15    16    17    18    19    20    21    22    23
-DUCK_CURVE = [
-    0.55,
-    0.50,
-    0.48,
-    0.47,
-    0.48,
-    0.52,  # 00-05: Night trough
-    0.60,
-    0.70,
-    0.80,
-    0.85,
-    0.82,
-    0.75,  # 06-11: Morning ramp then solar dip
-    0.70,
-    0.68,
-    0.70,
-    0.75,
-    0.85,
-    0.95,  # 12-17: Solar belly → evening ramp
-    1.00,
-    0.97,
-    0.90,
-    0.80,
-    0.70,
-    0.60,  # 18-23: Peak → wind down
-]
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SECTION 4B: GAME EVENT DEFINITIONS
-# ─────────────────────────────────────────────────────────────────────────────
-# Random events that create disruptions in the market, teaching students that
-# energy trading isn't just about weather — supply chain shocks, policy changes,
-# and demand surprises are constant. Each event has:
-#
-#   type:        Unique identifier
-#   headline:    Bloomberg-style news headline (shown in ticker)
-#   zones:       Which zones are affected (can be multiple or "ALL")
-#   price_mod:   EUR/MWh added/subtracted from affected zones' base price
-#   duration:    How many ticks (hours) the event lasts
-#   probability: Per-tick chance of occurring (low — these are rare events)
-#   ic_effect:   Optional dict of interconnector capacity overrides
-#
-# Educational note: Real energy markets are hit by these events regularly.
-# The 2022 European energy crisis was caused by a cascade of events:
-#   - Russian gas supply cuts (plant outage equivalent)
-#   - French nuclear fleet corrosion issues (plant outage)
-#   - Extreme heat waves (demand shock)
-#   - Carbon price hitting €100/tonne (carbon spike)
-# ─────────────────────────────────────────────────────────────────────────────
-
-EVENT_TEMPLATES: list[dict[str, Any]] = [
-    {
-        "type": "plant_outage",
-        "headlines": [
-            "BREAKING: {zone} nuclear plant offline — unplanned maintenance",
-            "ALERT: Major gas-fired unit tripped in {zone} — 2 GW offline",
-            "FLASH: {zone} coal plant emergency shutdown — emissions fault",
-        ],
-        "zones": ["DE", "FR", "PL"],  # Zones where this can occur
-        "price_mod": 15.0,  # +€15/MWh scarcity premium
-        "duration_range": (8, 24),  # 8-24 hours (doubled for player reaction time)
-        "probability": 0.015,  # 1.5% per tick per eligible zone
-    },
-    {
-        "type": "demand_shock_heat",
-        "headlines": [
-            "HEATWAVE: {zone} temperatures soar — AC demand surges",
-            "EXTREME HEAT: {zone} grid operator issues demand warning",
-        ],
-        "zones": ["DE", "FR", "NL"],
-        "price_mod": 12.0,  # Increased demand → higher prices
-        "duration_range": (12, 36),  # Heatwaves last longer (doubled)
-        "probability": 0.01,
-    },
-    {
-        "type": "demand_shock_cold",
-        "headlines": [
-            "COLD SNAP: {zone} heating demand spikes as temperatures plunge",
-            "FREEZE WARNING: {zone} electric heating load at seasonal high",
-        ],
-        "zones": ["DE", "FR", "PL"],
-        "price_mod": 10.0,
-        "duration_range": (12, 32),  # Doubled for player reaction time
-        "probability": 0.01,
-    },
-    {
-        "type": "carbon_price_spike",
-        "headlines": [
-            "EU ETS SURGE: Carbon price jumps €20/t — coal plants squeezed",
-            "CARBON SHOCK: EU allowance auction clears at record high",
-        ],
-        "zones": ["ALL"],  # Affects all zones, but coal-heavy zones more
-        # Price mod is applied proportional to coal share per zone
-        # (handled in code — PL gets full hit, FR gets minimal)
-        "price_mod": 8.0,
-        "duration_range": (24, 72),  # Carbon spikes persist (doubled)
-        "probability": 0.005,
-    },
-    {
-        "type": "interconnector_fault",
-        "headlines": [
-            "CABLE FAULT: {ic} interconnector capacity reduced to 50%",
-            "TRANSMISSION: {ic} line maintenance — capacity halved",
-        ],
-        "interconnectors": ["DE-FR", "DE-NL", "DE-DK", "DE-PL"],
-        "price_mod": 0.0,  # No direct price effect — works through coupling
-        "duration_range": (6, 20),  # Doubled for player reaction time
-        "probability": 0.008,
-    },
-    {
-        "type": "renewable_subsidy",
-        "headlines": [
-            "POLICY: {zone} announces emergency renewable curtailment subsidy",
-            "REGULATION: {zone} grid operator orders wind farm curtailment",
-        ],
-        "zones": ["DE", "DK", "NL"],
-        "price_mod": -8.0,  # Subsidized renewables push prices DOWN
-        "duration_range": (8, 20),  # Doubled for player reaction time
-        "probability": 0.008,
-    },
-    {
-        "type": "lng_cargo_arrival",
-        "headlines": [
-            "LNG: Spot cargo arrives at {zone} — gas prices ease",
-            "SUPPLY: Unscheduled LNG delivery to {zone} terminal",
-        ],
-        "zones": ["DE", "NL"],
-        "price_mod": -6.0,  # More gas → cheaper marginal unit → lower price
-        "duration_range": (12, 28),  # Doubled for player reaction time
-        "probability": 0.01,
-    },
-    {
-        "type": "grid_emergency",
-        "headlines": [
-            "EMERGENCY: {zone} TSO activates reserves — frequency deviation",
-            "GRID ALERT: {zone} system operator calls for emergency generation",
-        ],
-        "zones": ["DE", "FR", "PL"],
-        "price_mod": 25.0,  # Severe price spike during emergencies
-        "duration_range": (4, 10),  # Short but intense (doubled)
-        "probability": 0.005,
-    },
-]
-
-# Carbon intensity per zone — used to scale carbon price spike effects.
-# Higher = more coal/gas in the generation mix = more affected by carbon prices.
-CARBON_INTENSITY: dict[str, float] = {
-    "DE": 0.6,  # Mixed (coal + gas + renewables)
-    "FR": 0.15,  # Nuclear-dominated — barely affected
-    "NL": 0.7,  # Gas-heavy
-    "DK": 0.3,  # Wind-heavy but some gas backup
-    "PL": 1.0,  # Coal-dominated — maximum impact
-}
+from optimus.constants import (
+    CARBON_INTENSITY,
+    DUCK_CURVE,
+    EVENT_TEMPLATES,
+    FORECAST_HORIZON,
+    FORECAST_NOISE_SCALE,
+    INTERCONNECTORS,
+    SURPRISE_AMPLIFIER,
+    ZONES,
+)
 
 
 @dataclass
@@ -698,25 +343,6 @@ def advance_weather(state: GameState) -> None:
         # ── TEMPERATURE: Slow sinusoidal drift ──
         # Peaks at hour 14, troughs at hour 4 (realistic daily cycle)
         w.temperature = 15.0 + 5.0 * math.sin(math.pi * (hour - 4) / 12.0)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# FORECAST HORIZON & SURPRISE AMPLIFIER CONSTANTS
-# ─────────────────────────────────────────────────────────────────────────────
-
-FORECAST_HORIZON = 6  # How many hours ahead the forecast looks
-SURPRISE_AMPLIFIER = 1.5  # Price impact multiplier for forecast-vs-actual deviations
-
-# Per-zone forecast noise scaling. Zones with more variable weather have
-# noisier forecasts. This is realistic — predicting Danish North Sea wind
-# is genuinely harder than predicting French nuclear output.
-FORECAST_NOISE_SCALE: dict[str, float] = {
-    "DE": 1.0,  # Baseline
-    "FR": 0.5,  # Very predictable (nuclear-dominated, low renewables)
-    "NL": 1.3,  # Offshore wind is hard to forecast
-    "DK": 1.8,  # Hardest to forecast — North Sea storms are chaotic
-    "PL": 0.7,  # Mostly coal, moderate wind — fairly predictable
-}
 
 
 def generate_forecasts(state: GameState) -> None:
@@ -2774,6 +2400,25 @@ async def execute_trade(request: Request):
         if result.get("mwh_delivered") is not None
         else None,
     }
+
+
+@app.get("/health")
+async def health_check():
+    """Lightweight health endpoint for orchestrators (Docker, k8s, load balancers).
+
+    Reports liveness of the HTTP app and readiness of the simulation engine.
+    Does NOT touch the database so it stays fast and side-effect-free.
+    """
+    return JSONResponse(
+        {
+            "status": "ok",
+            "version": app.version,
+            "tick": game_state.tick,
+            "day": game_state.day,
+            "running": game_state.running,
+            "paused": game_state.paused,
+        }
+    )
 
 
 @app.get("/api/state")
