@@ -43,9 +43,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from optimus.config import (  # noqa: E402  (re-exports preserve legacy import paths)
     ADMIN_KEY,
-    BATTERY_CHARGE_EFF,
     BATTERY_CYCLE_LIFE,
-    BATTERY_DISCHARGE_EFF,
     BATTERY_EFF_DEGRADATION_FACTOR,
     BATTERY_EOL_SOH,
     BATTERY_MAX_MW,
@@ -1762,8 +1760,8 @@ async def startup():
     asyncio.create_task(game_loop())
     print("=" * 60)
     print("  BATTERY TRADER SIM — Server Started")
-    print(f"  Open http://localhost:8000 to play")
-    print(f"  Class password: {CLASS_PASSWORD}")
+    print("  Open http://localhost:8000 to play")
+    print("  Class password: (set via OPTIMUS_CLASS_PASSWORD, not logged)")
     print("=" * 60)
 
 
