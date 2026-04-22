@@ -5,7 +5,12 @@
 
 services:
   optimus:
-    build: .
+    build:
+      context: .
+      args:
+        VERSION: ${OPTIMUS_VERSION:-dev}
+    # Or pull the public image instead of building locally:
+    # image: ghcr.io/timpara/optimus:latest
     container_name: optimus
     restart: unless-stopped
     ports:
@@ -15,23 +20,25 @@ services:
       # To wipe and start fresh:  docker compose down -v
       - optimus-data:/data
 
-    # ── Environment variables (uncomment and change as needed) ──
-    # All values below show their defaults. The game runs fine without
-    # setting any of these — only override what you want to change.
-    #
-    # environment:
-    #   OPTIMUS_CLASS_PASSWORD: "trade2026"
-    #   OPTIMUS_ADMIN_KEY: "optimus_admin_2026"
-    #   OPTIMUS_TICK_INTERVAL: "1.0"
-    #   OPTIMUS_BATTERY_MAX_MWH: "50000"
-    #   OPTIMUS_BATTERY_MAX_MW: "10000"
-    #   OPTIMUS_BATTERY_START_MWH: "25000"
-    #   OPTIMUS_STARTING_CASH: "0.0"
-    #   OPTIMUS_STARTING_REF_PRICE: "45.0"
+    # ── Required secrets ──
+    # The server refuses to start without these. Set them in a `.env` file
+    # (copy from `.env.example`) or inline below.
+    env_file:
+      - .env
 
-    # Alternatively, load all env vars from a file:
-    # env_file:
-    #   - .env
+    # Lightweight healthcheck via /health (overrides any in the image).
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status == 200 else 1)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   optimus-data:
