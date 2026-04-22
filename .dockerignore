@@ -1,0 +1,23 @@
+# Dependencies & caches
+.venv/
+__pycache__/
+.ruff_cache/
+
+# IDE
+.idea/
+
+# Runtime database files (container creates its own)
+*.db
+*.db-shm
+*.db-wal
+
+# Docker / Git
+.git/
+.gitignore
+.dockerignore
+Dockerfile
+docker-compose.yml
+
+# Docs
+*.md
+LICENSE

@@ -1,0 +1,2729 @@
+<!DOCTYPE html>
+<!--
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  BATTERY TRADER SIM — index.html                                           ║
+║  Single-page frontend: Leaflet map, Chart.js, trading panel, leaderboard   ║
+║  All dependencies loaded via CDN — zero build step required                ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Battery Trader Sim</title>
+
+    <!-- ── CDN Dependencies ── -->
+    <!-- Tailwind CSS (play CDN for rapid prototyping — no build step needed) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for price history line charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <!-- Leaflet.js for the interactive geographic map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- ── Tailwind Custom Config ── -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'terminal': {
+                            bg: '#0a0e17',
+                            panel: '#111827',
+                            border: '#1e293b',
+                            green: '#00ff88',
+                            red: '#ff4444',
+                            amber: '#ffaa00',
+                            blue: '#3b82f6',
+                            cyan: '#06b6d4',
+                            muted: '#64748b',
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['"JetBrains Mono"', '"Fira Code"', 'Consolas', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- ── Custom Styles (Bloomberg Terminal aesthetic) ── -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+
+        * { box-sizing: border-box; }
+
+        body {
+            background: #0a0e17;
+            color: #e2e8f0;
+            font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+            margin: 0;
+            overflow-x: hidden;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0a0e17; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+
+        /* Leaflet map overrides for dark theme */
+        .leaflet-container { background: #0a0e17 !important; }
+        .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.8) contrast(1.2); }
+        .leaflet-control-zoom a {
+            background: #111827 !important;
+            color: #e2e8f0 !important;
+            border-color: #1e293b !important;
+        }
+
+        /* Country label on map */
+        .zone-label {
+            background: rgba(10, 14, 23, 0.85);
+            border: 1px solid #1e293b;
+            border-radius: 4px;
+            padding: 3px 7px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            white-space: nowrap;
+            color: #e2e8f0;
+            pointer-events: none;
+        }
+
+        /* Interconnector flow label */
+        .flow-label {
+            background: rgba(10, 14, 23, 0.9);
+            border: 1px solid #1e293b;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+        .flow-label.congested {
+            border-color: #ff4444;
+            color: #ff4444;
+            animation: pulse-red 1s ease-in-out infinite;
+        }
+
+        @keyframes pulse-red {
+            0%, 100% { box-shadow: 0 0 4px rgba(255, 68, 68, 0.3); }
+            50% { box-shadow: 0 0 12px rgba(255, 68, 68, 0.7); }
+        }
+
+        /* Battery gauge animation */
+        .battery-fill {
+            transition: width 0.5s ease-out, background-color 0.5s ease-out;
+        }
+
+        /* Panel glow effect on hover */
+        .panel-glow {
+            transition: box-shadow 0.3s ease;
+        }
+        .panel-glow:hover {
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.05);
+        }
+
+        /* Trade button effects */
+        .btn-buy {
+            background: linear-gradient(135deg, #059669, #10b981);
+            transition: all 0.2s ease;
+        }
+        .btn-buy:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); }
+        .btn-buy:active { transform: translateY(0); }
+
+        .btn-sell {
+            background: linear-gradient(135deg, #dc2626, #ef4444);
+            transition: all 0.2s ease;
+        }
+        .btn-sell:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3); }
+        .btn-sell:active { transform: translateY(0); }
+
+        /* Storm indicator animation */
+        @keyframes storm-flash {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .storm-active { animation: storm-flash 0.8s ease-in-out infinite; }
+
+        /* Login overlay */
+        .login-overlay {
+            backdrop-filter: blur(8px);
+            background: rgba(10, 14, 23, 0.95);
+        }
+
+        /* Toast notification */
+        .toast {
+            animation: slide-in 0.3s ease-out, fade-out 0.5s ease-in 2.5s forwards;
+        }
+        @keyframes slide-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+
+        /* Leaderboard row highlight */
+        .lb-row:nth-child(1) .lb-rank { color: #ffd700; } /* Gold */
+        .lb-row:nth-child(2) .lb-rank { color: #c0c0c0; } /* Silver */
+        .lb-row:nth-child(3) .lb-rank { color: #cd7f32; } /* Bronze */
+
+        /* News ticker scrolling animation */
+        @keyframes ticker-scroll {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
+        .ticker-scroll {
+            animation: ticker-scroll 30s linear infinite;
+        }
+        .ticker-scroll:hover {
+            animation-play-state: paused;
+        }
+
+        /* Event type color coding */
+        .event-breaking { color: #ff4444; }
+        .event-active { color: #ffaa00; }
+        .event-ended { color: #64748b; }
+
+        /* Mobile-responsive adjustments */
+        @media (max-width: 768px) {
+            body { font-size: 12px; }
+            .btn-buy, .btn-sell { min-height: 48px; }  /* Touch-friendly */
+            #tradeSlider { height: 24px; }  /* Easier to drag on touch */
+
+            /* Reduce fixed-height panels on mobile */
+            .mobile-map { height: 180px !important; }
+            .mobile-chart { height: 150px !important; }
+            .mobile-chart-inner { height: 120px !important; }
+            .mobile-weather { height: 140px !important; }
+            .mobile-health-chart { height: 90px !important; }
+
+            /* Reorder: trade controls appear before map/chart on mobile */
+            .mobile-trade-first { order: -2; }
+            .mobile-battery-first { order: -1; }
+
+            /* Collapsible panels */
+            .mobile-collapsible > summary {
+                cursor: pointer;
+                list-style: none;
+                padding: 8px 12px;
+            }
+            .mobile-collapsible > summary::-webkit-details-marker { display: none; }
+            .mobile-collapsible > summary::before {
+                content: '+ ';
+                color: #00ff88;
+                font-weight: bold;
+            }
+            .mobile-collapsible[open] > summary::before {
+                content: '- ';
+            }
+        }
+
+        @media (max-width: 1024px) {
+            /* Stack map and chart more compactly on tablets */
+            .panel-glow { min-height: auto !important; }
+        }
+
+        @media (min-width: 769px) {
+            /* On desktop, collapsible details should always be open */
+            .mobile-collapsible { display: block; }
+            .mobile-collapsible > summary { display: none; }
+            .mobile-collapsible > .panel-content { display: block !important; }
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <!-- LOGIN OVERLAY — Shown before authentication                        -->
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div id="loginOverlay" class="login-overlay fixed inset-0 z-50 flex items-center justify-center">
+        <div class="bg-terminal-panel border border-terminal-border rounded-lg p-8 w-full max-w-md mx-4 shadow-2xl">
+            <!-- Logo / Title -->
+            <div class="text-center mb-8">
+                <div class="text-4xl mb-2">&#9889;</div>
+                <h1 class="text-2xl font-bold text-terminal-green tracking-wider">BATTERY TRADER SIM</h1>
+                <p class="text-terminal-muted text-sm mt-2">50 GWh Grid Battery &bull; European Energy Markets</p>
+            </div>
+
+            <!-- Login Form -->
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs text-terminal-muted uppercase tracking-wider mb-1">Username</label>
+                    <input id="loginUsername" type="text" maxlength="20" placeholder="Enter your trader name"
+                        class="w-full bg-terminal-bg border border-terminal-border rounded px-3 py-2 text-sm
+                               text-terminal-green placeholder-terminal-muted/50 focus:border-terminal-green
+                               focus:outline-none focus:ring-1 focus:ring-terminal-green/30" />
+                </div>
+                <div>
+                    <label class="block text-xs text-terminal-muted uppercase tracking-wider mb-1">Class Password</label>
+                    <input id="loginPassword" type="password" placeholder="Enter class password"
+                        class="w-full bg-terminal-bg border border-terminal-border rounded px-3 py-2 text-sm
+                               text-terminal-green placeholder-terminal-muted/50 focus:border-terminal-green
+                               focus:outline-none focus:ring-1 focus:ring-terminal-green/30" />
+                </div>
+
+                <div id="loginError" class="text-terminal-red text-xs hidden"></div>
+
+                <div class="pt-2">
+                    <button onclick="handleLogin()"
+                        class="w-full bg-terminal-green/20 border border-terminal-green/40 text-terminal-green
+                               rounded py-2.5 text-sm font-bold hover:bg-terminal-green/30 transition-colors tracking-wider">
+                        &#9889; PLAY
+                    </button>
+                </div>
+
+                <p class="text-terminal-muted text-xs text-center mt-4">
+                    Enter your trader name and class password to join or resume.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <!-- MAIN GAME UI — Hidden until authenticated                          -->
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div id="gameUI" class="hidden flex flex-col h-screen">
+
+        <!-- ── TOP HEADER BAR ── -->
+        <header class="bg-terminal-panel border-b border-terminal-border px-2 md:px-4 py-2 flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-2 md:gap-3">
+                <span class="text-xl">&#9889;</span>
+                <h1 class="text-terminal-green font-bold text-xs md:text-sm tracking-widest">BATTERY TRADER</h1>
+                <span class="text-terminal-muted text-xs hidden md:inline">v2.0</span>
+            </div>
+            <div class="flex items-center gap-2 md:gap-4 text-xs">
+                <!-- Game Clock -->
+                <div class="flex items-center gap-1 md:gap-2">
+                    <span class="text-terminal-muted hidden sm:inline">DAY</span>
+                    <span id="headerDay" class="text-terminal-green font-bold">1</span>
+                    <span class="text-terminal-muted hidden sm:inline">HOUR</span>
+                    <span id="headerHour" class="text-terminal-cyan font-bold">00:00</span>
+                    <span id="headerSpeed" class="text-terminal-amber font-bold hidden ml-1">[2x]</span>
+                </div>
+                <div class="w-px h-4 bg-terminal-border hidden sm:block"></div>
+                <!-- Player Info (hidden on very small screens) -->
+                <div class="flex items-center gap-2 hidden sm:flex">
+                    <span class="text-terminal-muted">TRADER</span>
+                    <span id="headerUsername" class="text-white font-medium">—</span>
+                    <button onclick="handleLogout()" title="Logout"
+                        class="text-terminal-muted hover:text-terminal-red text-xs ml-1 transition-colors">
+                        [exit]
+                    </button>
+                </div>
+                <div class="w-px h-4 bg-terminal-border hidden sm:block"></div>
+                <!-- PnL Badges -->
+                <div class="flex items-center gap-1 md:gap-2">
+                    <span class="text-terminal-muted">Realized</span>
+                    <span id="headerRealizedPnl" class="font-bold">€0.00</span>
+                </div>
+                <div class="flex items-center gap-1 md:gap-2">
+                    <span class="text-terminal-muted">Floating</span>
+                    <span id="headerFloatingPnl" class="font-bold">€0.00</span>
+                </div>
+                <!-- Connection Status -->
+                <div id="wsStatus" class="w-2 h-2 rounded-full bg-terminal-red" title="Disconnected"></div>
+                <!-- Tutorial trigger -->
+                <button onclick="startTutorial()" class="text-terminal-muted text-xs hover:text-terminal-green transition-colors" title="Show tutorial">?</button>
+                <!-- Sound toggle -->
+                <button onclick="toggleSound()" id="soundToggle" class="text-terminal-muted text-xs hover:text-terminal-green transition-colors" title="Toggle sound (M)">&#9834;</button>
+            </div>
+        </header>
+
+        <!-- ── NEWS TICKER BAR ── -->
+        <div id="newsTicker" class="bg-terminal-bg border-b border-terminal-border px-4 py-1 flex items-center gap-3 overflow-hidden shrink-0" style="height: 28px;">
+            <span class="text-terminal-amber text-xs font-bold tracking-wider shrink-0">NEWS</span>
+            <div class="w-px h-3 bg-terminal-border shrink-0"></div>
+            <div id="newsTickerContent" class="text-xs text-terminal-muted whitespace-nowrap overflow-hidden ticker-scroll">
+                Waiting for market data...
+            </div>
+        </div>
+
+        <!-- ── ACTIVE EVENTS BAR (always visible, fixed height) ── -->
+        <div id="activeEventsBar" class="bg-terminal-red/10 border-b border-terminal-red/30 px-4 shrink-0 flex items-center" style="height: 28px;">
+            <div id="activeEventsContent" class="flex items-center gap-4 text-xs overflow-x-auto w-full">
+                <span class="text-terminal-muted">No active events</span>
+            </div>
+        </div>
+
+        <!-- ── MAIN CONTENT GRID ── -->
+        <!-- Responsive: single column on mobile, 8+4 on desktop -->
+        <main class="p-2 md:p-3 grid grid-cols-1 lg:grid-cols-12 gap-2 md:gap-3 lg:overflow-hidden flex-1 min-h-0">
+
+            <!-- ════════════════════════════════════════════════════════════ -->
+            <!-- LEFT COLUMN: MAP + CHART (8 cols)                           -->
+            <!-- ════════════════════════════════════════════════════════════ -->
+            <div class="lg:col-span-8 flex flex-col gap-2 md:gap-3 min-h-0">
+
+                <!-- ── MAP PANEL ── -->
+                <div class="bg-terminal-panel border border-terminal-border rounded-lg panel-glow flex flex-col shrink-0 mobile-map" style="height: 300px;">
+                    <div class="px-3 py-2 border-b border-terminal-border flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="text-terminal-green text-xs font-bold tracking-wider">MARKET MAP</span>
+                            <span class="text-terminal-muted text-xs">— Central Europe Price Heatmap</span>
+                        </div>
+                        <!-- Map legend -->
+                        <div class="flex items-center gap-2 text-xs">
+                            <span class="text-terminal-muted">Price:</span>
+                            <div class="flex items-center gap-1">
+                                <div class="w-3 h-3 rounded" style="background: #00ff88;"></div>
+                                <span class="text-terminal-muted">Cheap</span>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <div class="w-3 h-3 rounded" style="background: #ffaa00;"></div>
+                                <span class="text-terminal-muted">Mid</span>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <div class="w-3 h-3 rounded" style="background: #ff4444;"></div>
+                                <span class="text-terminal-muted">High</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="map" class="flex-1 rounded-b-lg"></div>
+                </div>
+
+                <!-- ── PRICE CHART PANEL ── -->
+                <div class="bg-terminal-panel border border-terminal-border rounded-lg panel-glow shrink-0 mobile-chart" style="height: 220px;">
+                    <div class="px-3 py-2 border-b border-terminal-border">
+                        <span class="text-terminal-green text-xs font-bold tracking-wider">PRICE HISTORY</span>
+                        <span class="text-terminal-muted text-xs"> — EUR/MWh (last 72 hours)</span>
+                    </div>
+                    <div class="p-2 mobile-chart-inner" style="height: 178px;">
+                        <canvas id="priceChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- ── BOTTOM ROW: Zone Prices + Interconnectors + Leaderboard ── -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-3 flex-1 min-h-0">
+
+                    <!-- ── ZONE PRICES TABLE ── -->
+                    <div class="bg-terminal-panel border border-terminal-border rounded-lg p-3 panel-glow flex flex-col min-h-0">
+                        <div class="text-terminal-muted text-xs tracking-wider mb-2 shrink-0">ALL ZONE PRICES</div>
+                        <div class="overflow-y-auto flex-1 min-h-0">
+                            <table class="w-full text-xs">
+                                <thead class="sticky top-0 bg-terminal-panel">
+                                    <tr class="text-terminal-muted border-b border-terminal-border">
+                                        <th class="text-left py-1">Zone</th>
+                                        <th class="text-right py-1">Price</th>
+                                        <th class="text-right py-1">Wind</th>
+                                        <th class="text-center py-1">Storm</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="zonePricesBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- ── INTERCONNECTOR STATUS ── -->
+                    <div class="bg-terminal-panel border border-terminal-border rounded-lg p-3 panel-glow flex flex-col min-h-0">
+                        <div class="text-terminal-muted text-xs tracking-wider mb-2 shrink-0">INTERCONNECTORS</div>
+                        <div id="interconnectorList" class="space-y-2 overflow-y-auto flex-1 min-h-0"></div>
+                    </div>
+
+                    <!-- ── LEADERBOARD ── -->
+                    <div class="bg-terminal-panel border border-terminal-border rounded-lg p-3 panel-glow flex flex-col min-h-0">
+                        <div class="text-terminal-muted text-xs tracking-wider mb-2 shrink-0">TOP TRADERS</div>
+                        <div class="overflow-y-auto flex-1 min-h-0">
+                            <table class="w-full text-xs">
+                                <thead class="sticky top-0 bg-terminal-panel">
+                                    <tr class="text-terminal-muted border-b border-terminal-border">
+                                        <th class="text-left py-1 w-8">#</th>
+                                        <th class="text-left py-1">Trader</th>
+                                        <th class="text-right py-1">Realized</th>
+                                        <th class="text-right py-1">Floating</th>
+                                        <th class="text-right py-1">Battery</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="leaderboardBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ════════════════════════════════════════════════════════════ -->
+            <!-- RIGHT COLUMN: PRICE + WEATHER + BATTERY + TRADING + PORTFOLIO -->
+            <!-- ════════════════════════════════════════════════════════════ -->
+            <div class="lg:col-span-4 flex flex-col gap-2 md:gap-3 overflow-y-auto min-h-0">
+
+                <!-- ── GERMAN PRICE (prominent) ── -->
+                <div class="bg-terminal-panel border border-terminal-border rounded-lg p-4 panel-glow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-terminal-muted text-xs tracking-wider">GERMANY SPOT PRICE</div>
+                            <div id="dePriceLarge" class="text-3xl font-bold text-terminal-green mt-1">€45.00</div>
+                            <div class="text-terminal-muted text-xs mt-1">EUR/MWh</div>
+                            <!-- New: vs average buy price indicator -->
+                            <div id="vsAvgIndicator" class="text-xs mt-1 hidden">
+                                vs your avg buy: <span id="vsAvgText" class="font-bold">—</span>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div id="deWeatherInfo" class="text-xs text-terminal-muted space-y-1">
+                                <div>Wind: <span id="deWind" class="text-white">6.0</span> m/s</div>
+                                <div>Solar: <span id="deSolar" class="text-white">0%</span></div>
+                                <div>Temp: <span id="deTemp" class="text-white">15°C</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── WEATHER FORECAST (NEW) ── -->
+                <details class="mobile-collapsible" open>
+                    <summary class="bg-terminal-panel border border-terminal-border rounded-lg text-terminal-muted text-xs tracking-wider md:hidden">WEATHER FORECAST</summary>
+                <div class="panel-content bg-terminal-panel border border-terminal-border rounded-lg panel-glow flex flex-col mobile-weather" style="height: 180px;">
+                    <div class="flex items-center justify-between px-3 pt-3 pb-2 shrink-0">
+                        <span class="text-terminal-muted text-xs tracking-wider">WEATHER FORECAST</span>
+                        <span class="text-terminal-muted text-xs">next 6h</span>
+                    </div>
+
+                    <div class="overflow-y-auto px-3 pb-3 min-h-0 flex-1">
+                        <!-- Forecast-vs-Actual comparison (current hour) -->
+                        <div id="forecastDeviation" class="mb-2 p-2 bg-terminal-bg rounded text-xs space-y-1">
+                            <div class="text-terminal-muted text-xs font-bold mb-1">ACTUAL vs FORECAST (now)</div>
+                            <div id="deviationRows"></div>
+                        </div>
+
+                        <!-- Wind forecast sparklines per zone (6 hours ahead) -->
+                        <div id="forecastSparklines" class="space-y-1.5"></div>
+
+                        <!-- Storm warnings -->
+                        <div id="stormWarnings" class="mt-2 hidden">
+                            <div class="text-terminal-red text-xs font-bold storm-active" id="stormWarningText"></div>
+                        </div>
+                    </div>
+                </div>
+                </details>
+
+                <!-- ── BATTERY GAUGE ── -->
+                <div class="bg-terminal-panel border border-terminal-border rounded-lg p-4 panel-glow mobile-battery-first">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-terminal-muted text-xs tracking-wider">BATTERY STATUS</span>
+                        <span id="batteryPctText" class="text-terminal-green text-xs font-bold">50.0%</span>
+                    </div>
+                    <!-- Battery graphic -->
+                    <div class="relative">
+                        <div class="w-full h-8 bg-terminal-bg rounded border border-terminal-border overflow-hidden flex">
+                            <div id="batteryFill" class="battery-fill h-full rounded-l" style="width: 50%; background: #10b981;"></div>
+                        </div>
+                        <div class="absolute inset-0 flex items-center justify-center text-xs font-bold">
+                            <span id="batteryMwhText" class="drop-shadow-lg">25,000 / 50,000 MWh</span>
+                        </div>
+                    </div>
+                    <!-- Power rate indicator -->
+                    <div class="flex justify-between mt-2 text-xs text-terminal-muted">
+                        <span>Max Rate: <span id="maxRateDisplay">10 GW</span></span>
+                        <span>Cash: <span id="cashDisplay" class="text-white">€0.00</span></span>
+                    </div>
+                    <!-- Taper warning (hidden by default) -->
+                    <div id="taperWarning" class="mt-1 text-xs text-terminal-amber hidden">
+                        CHARGE TAPER: <span id="taperPctText">100%</span> rate (SoC &gt; 80%)
+                    </div>
+                </div>
+
+                <!-- ── BATTERY HEALTH ── -->
+                <details class="mobile-collapsible" open>
+                    <summary class="bg-terminal-panel border border-terminal-border rounded-lg text-terminal-muted text-xs tracking-wider md:hidden">BATTERY HEALTH</summary>
+                <div class="panel-content bg-terminal-panel border border-terminal-border rounded-lg p-3 panel-glow">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-terminal-muted text-xs tracking-wider">BATTERY HEALTH</span>
+                        <span id="sohPctText" class="text-terminal-green text-xs font-bold">100.0% SoH</span>
+                    </div>
+                    <!-- Health chart -->
+                    <div class="mobile-health-chart" style="height: 120px;">
+                        <canvas id="healthChart"></canvas>
+                    </div>
+                    <!-- Metrics row -->
+                    <div class="grid grid-cols-3 gap-2 mt-2 text-xs">
+                        <div class="bg-terminal-bg rounded p-1.5 text-center">
+                            <div class="text-terminal-muted">Cycles</div>
+                            <div id="cycleCount" class="font-bold text-white">0 / 5,000</div>
+                        </div>
+                        <div class="bg-terminal-bg rounded p-1.5 text-center">
+                            <div class="text-terminal-muted">Eff. Cap</div>
+                            <div id="effectiveCapacity" class="font-bold text-white">50,000 MWh</div>
+                        </div>
+                        <div class="bg-terminal-bg rounded p-1.5 text-center">
+                            <div class="text-terminal-muted">RT Eff.</div>
+                            <div id="rtEfficiency" class="font-bold text-white">90.0%</div>
+                        </div>
+                    </div>
+                </div>
+                </details>
+
+                <!-- ── TRADING CONTROLS ── -->
+                <div class="bg-terminal-panel border border-terminal-border rounded-lg p-4 panel-glow mobile-trade-first">
+                    <div class="text-terminal-muted text-xs tracking-wider mb-3">TRADE EXECUTION</div>
+                    <!-- MW Slider -->
+                    <div class="mb-3">
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-terminal-muted">Trade Size (MW)</span>
+                            <span id="tradeAmountDisplay" class="text-white font-bold">1,000 MW</span>
+                        </div>
+                        <input id="tradeSlider" type="range" min="100" max="10000" step="100" value="1000"
+                            class="w-full h-2 bg-terminal-bg rounded-lg appearance-none cursor-pointer
+                                   accent-terminal-green" oninput="updateTradeAmount()" />
+                        <div class="flex justify-between text-xs text-terminal-muted mt-1">
+                            <span>100 MW</span>
+                            <span>10,000 MW</span>
+                        </div>
+                    </div>
+                    <!-- Cost preview -->
+                    <div id="costPreview" class="text-xs text-terminal-muted mb-3 text-center">
+                        Est. cost: €45,000
+                    </div>
+                    <!-- Buy/Sell buttons -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <button onclick="executeTrade('BUY')"
+                            class="btn-buy text-white font-bold py-3 rounded text-sm tracking-wider">
+                            BUY<br><span class="text-xs font-normal opacity-80">Charge Battery</span>
+                        </button>
+                        <button onclick="executeTrade('SELL')"
+                            class="btn-sell text-white font-bold py-3 rounded text-sm tracking-wider">
+                            SELL<br><span class="text-xs font-normal opacity-80">Discharge Battery</span>
+                        </button>
+                    </div>
+                    <!-- Trade feedback -->
+                    <div id="tradeFeedback" class="text-xs text-center mt-2 h-4"></div>
+                </div>
+
+                <!-- ── DAY-AHEAD MARKET (NEW) ── -->
+                <div class="bg-terminal-panel border border-terminal-border rounded-lg p-3 panel-glow">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-terminal-muted text-xs tracking-wider">DAY-AHEAD AUCTION</span>
+                        <span id="daStatus" class="text-xs text-terminal-amber">Gate open</span>
+                    </div>
+                    <div class="text-xs text-terminal-muted mb-2">
+                        Submit a bid for the next DA clearing at <span class="text-white font-bold">12:00</span>.
+                        All accepted bids execute at the uniform clearing price.
+                    </div>
+                    <!-- DA Bid type -->
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <button id="daBidBuy" onclick="setDABidType('BUY')"
+                            class="text-xs py-1.5 rounded border border-terminal-green/40 text-terminal-green bg-terminal-green/10 font-medium">
+                            BID TO BUY
+                        </button>
+                        <button id="daBidSell" onclick="setDABidType('SELL')"
+                            class="text-xs py-1.5 rounded border border-terminal-border text-terminal-muted">
+                            BID TO SELL
+                        </button>
+                    </div>
+                    <!-- DA Price input -->
+                    <div class="flex gap-2 mb-2">
+                        <div class="flex-1">
+                            <label class="text-xs text-terminal-muted block mb-0.5">Limit Price (EUR/MWh)</label>
+                            <input id="daBidPrice" type="number" value="45" step="1" min="-50" max="200"
+                                class="w-full bg-terminal-bg border border-terminal-border rounded px-2 py-1.5 text-xs
+                                       text-white focus:border-terminal-green focus:outline-none" />
+                        </div>
+                        <div class="flex-1">
+                            <label class="text-xs text-terminal-muted block mb-0.5">Volume (MW)</label>
+                            <input id="daBidMW" type="number" value="2000" step="100" min="100" max="10000"
+                                class="w-full bg-terminal-bg border border-terminal-border rounded px-2 py-1.5 text-xs
+                                       text-white focus:border-terminal-green focus:outline-none" />
+                        </div>
+                    </div>
+                    <!-- Submit -->
+                    <button onclick="submitDABid()"
+                        class="w-full bg-terminal-amber/20 border border-terminal-amber/40 text-terminal-amber
+                               rounded py-1.5 text-xs font-medium hover:bg-terminal-amber/30 transition-colors">
+                        SUBMIT DA BID
+                    </button>
+                    <!-- DA feedback -->
+                    <div id="daFeedback" class="text-xs text-center mt-1.5 h-4"></div>
+                    <!-- Last clearing info -->
+                    <div id="daLastClearing" class="mt-2 p-2 bg-terminal-bg rounded text-xs hidden">
+                        <div class="text-terminal-muted font-bold mb-1">LAST CLEARING</div>
+                        <div id="daClearingInfo"></div>
+                    </div>
+                </div>
+
+                <!-- ── PORTFOLIO ANALYTICS (NEW) ── -->
+                <details class="mobile-collapsible" open>
+                    <summary class="bg-terminal-panel border border-terminal-border rounded-lg text-terminal-muted text-xs tracking-wider md:hidden">PORTFOLIO</summary>
+                <div class="panel-content bg-terminal-panel border border-terminal-border rounded-lg p-3 panel-glow">
+                    <div class="text-terminal-muted text-xs tracking-wider mb-2">PORTFOLIO</div>
+
+                    <!-- Key metrics row -->
+                    <div class="grid grid-cols-2 gap-2 text-xs mb-2">
+                        <div class="bg-terminal-bg rounded p-2">
+                            <div class="text-terminal-muted">Avg Buy Price</div>
+                            <div id="avgBuyPrice" class="text-terminal-green font-bold text-sm">—</div>
+                        </div>
+                        <div class="bg-terminal-bg rounded p-2">
+                            <div class="text-terminal-muted">Avg Sell Price</div>
+                            <div id="avgSellPrice" class="text-terminal-red font-bold text-sm">—</div>
+                        </div>
+                    </div>
+
+                    <!-- Spread and volume -->
+                    <div class="text-xs space-y-1 mb-2">
+                        <div class="flex justify-between">
+                            <span class="text-terminal-muted">Spread (sell - buy)</span>
+                            <span id="portfolioSpread" class="font-bold">—</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-terminal-muted">Total Bought</span>
+                            <span id="totalBought" class="text-white">0 MWh</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-terminal-muted">Total Sold</span>
+                            <span id="totalSold" class="text-white">0 MWh</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-terminal-muted">Trades</span>
+                            <span id="tradeCount" class="text-white">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Recent trades log -->
+                    <div class="text-terminal-muted text-xs font-bold mb-1">RECENT TRADES</div>
+                    <div id="recentTradesLog" class="text-xs space-y-0.5 max-h-32 overflow-y-auto">
+                        <div class="text-terminal-muted">No trades yet</div>
+                    </div>
+                </div>
+                </details>
+            </div>
+        </main>
+    </div>
+
+    <!-- ── Toast Container ── -->
+    <div id="toastContainer" class="fixed top-16 right-4 z-50 space-y-2"></div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <!-- TUTORIAL OVERLAY                                                    -->
+    <!-- Step-by-step onboarding that teaches players the UI and mechanics   -->
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <div id="tutorialOverlay" class="fixed inset-0 z-40 hidden">
+        <!-- Semi-transparent backdrop (click to dismiss) -->
+        <div class="absolute inset-0 bg-black/60" onclick="tutorialSkip()"></div>
+        <!-- Tutorial card (positioned dynamically, z-10 to stack above backdrop) -->
+        <div id="tutorialCard" class="absolute z-10 bg-terminal-panel border border-terminal-green/50 rounded-lg p-5 shadow-2xl"
+             style="max-width: 380px;">
+            <div class="flex items-center justify-between mb-3">
+                <span class="text-terminal-green text-xs font-bold tracking-wider">TUTORIAL</span>
+                <span id="tutorialStepCounter" class="text-terminal-muted text-xs">1/8</span>
+            </div>
+            <h3 id="tutorialTitle" class="text-white font-bold text-sm mb-2"></h3>
+            <p id="tutorialText" class="text-terminal-muted text-xs leading-relaxed mb-4"></p>
+            <div class="flex justify-between items-center">
+                <button onclick="tutorialPrev()"
+                    id="tutorialPrevBtn"
+                    class="text-terminal-muted text-xs hover:text-white transition-colors">
+                    &larr; Back
+                </button>
+                <div class="flex gap-2">
+                    <button onclick="tutorialSkip()"
+                        class="text-terminal-muted text-xs hover:text-white transition-colors">
+                        Skip tutorial
+                    </button>
+                    <button onclick="tutorialNext()"
+                        id="tutorialNextBtn"
+                        class="bg-terminal-green/20 border border-terminal-green/40 text-terminal-green
+                               rounded px-4 py-1.5 text-xs font-medium hover:bg-terminal-green/30 transition-colors">
+                        Next &rarr;
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <!-- JAVASCRIPT — Game Logic, WebSocket, Map, Chart                     -->
+    <!-- ════════════════════════════════════════════════════════════════════ -->
+    <script>
+    // ─────────────────────────────────────────────────────────────────────
+    // SECTION 1: APPLICATION STATE
+    // ─────────────────────────────────────────────────────────────────────
+
+    let appState = {
+        token: null,
+        playerId: null,
+        username: null,
+        ws: null,
+        reconnectAttempts: 0,
+        maxReconnectAttempts: 20,
+        player: { cash: 0, battery_mwh: 25000, pnl: 0, battery_soh: 1.0, battery_cycles: 0, effective_capacity_mwh: 50000, rt_efficiency: 0.9, soh_history: [], taper_mult: 1.0 },
+    };
+
+    // ─────────────────────────────────────────────────────────────────────
+    // SECTION 2: AUTHENTICATION
+    // ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * Check if we have a saved session in localStorage.
+     * If so, auto-login and skip the login overlay.
+     */
+    function checkSavedSession() {
+        const saved = localStorage.getItem('bts_session');
+        if (saved) {
+            try {
+                const session = JSON.parse(saved);
+                appState.token = session.token;
+                appState.playerId = session.playerId;
+                appState.username = session.username;
+                showGameUI();
+                return true;
+            } catch (e) {
+                localStorage.removeItem('bts_session');
+            }
+        }
+        return false;
+    }
+
+    async function handleRegister() {
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        const errorEl = document.getElementById('loginError');
+        errorEl.classList.add('hidden');
+
+        if (!username || !password) {
+            errorEl.textContent = 'Please enter both username and password.';
+            errorEl.classList.remove('hidden');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password }),
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+                errorEl.textContent = data.detail || 'Registration failed.';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+
+            // Save session
+            appState.token = data.token;
+            appState.playerId = data.player_id;
+            appState.username = data.username;
+            localStorage.setItem('bts_session', JSON.stringify({
+                token: data.token, playerId: data.player_id, username: data.username
+            }));
+
+            showGameUI();
+        } catch (e) {
+            errorEl.textContent = 'Network error. Is the server running?';
+            errorEl.classList.remove('hidden');
+        }
+    }
+
+    async function handleLogin() {
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        const errorEl = document.getElementById('loginError');
+        errorEl.classList.add('hidden');
+
+        if (!username || !password) {
+            errorEl.textContent = 'Please enter both username and password.';
+            errorEl.classList.remove('hidden');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password }),
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+                errorEl.textContent = data.detail || 'Login failed.';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+
+            appState.token = data.token;
+            appState.playerId = data.player_id;
+            appState.username = data.username;
+            appState.player = {
+                cash: data.cash || 0,
+                battery_mwh: data.battery_mwh || 25000,
+                pnl: data.pnl || 0,
+            };
+            localStorage.setItem('bts_session', JSON.stringify({
+                token: data.token, playerId: data.player_id, username: data.username
+            }));
+
+            showGameUI();
+        } catch (e) {
+            errorEl.textContent = 'Network error. Is the server running?';
+            errorEl.classList.remove('hidden');
+        }
+    }
+
+    // Allow Enter key to trigger login
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !document.getElementById('loginOverlay').classList.contains('hidden')) {
+            handleLogin();
+        }
+    });
+
+    function showGameUI() {
+        document.getElementById('loginOverlay').classList.add('hidden');
+        document.getElementById('gameUI').classList.remove('hidden');
+        document.getElementById('headerUsername').textContent = appState.username;
+
+        // Initialize all UI components
+        initMap();
+        initChart();
+        initHealthChart();
+        connectWebSocket();
+        updateTradeAmount();
+
+        // Show tutorial for first-time users (after a brief delay for UI to render)
+        if (!sessionStorage.getItem('bts_tutorial_seen')) {
+            setTimeout(startTutorial, 1500);
+        }
+    }
+
+    function handleLogout() {
+        localStorage.removeItem('bts_session');
+        appState.token = null;
+        appState.playerId = null;
+        appState.username = null;
+        appState.player = null;
+        // Close WebSocket if connected
+        if (appState.ws) {
+            try { appState.ws.close(); } catch (e) {}
+            appState.ws = null;
+        }
+        document.getElementById('gameUI').classList.add('hidden');
+        document.getElementById('loginOverlay').classList.remove('hidden');
+        document.getElementById('loginUsername').value = '';
+        document.getElementById('loginPassword').value = '';
+        document.getElementById('loginError').classList.add('hidden');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // SECTION 3: WEBSOCKET CONNECTION
+    // ─────────────────────────────────────────────────────────────────────
+
+    function connectWebSocket() {
+        const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const url = `${protocol}//${location.host}/ws?token=${appState.token}`;
+
+        appState.ws = new WebSocket(url);
+
+        appState.ws.onopen = () => {
+            document.getElementById('wsStatus').className = 'w-2 h-2 rounded-full bg-terminal-green';
+            document.getElementById('wsStatus').title = 'Connected';
+            appState.reconnectAttempts = 0;
+            // Request fresh player data
+            appState.ws.send(JSON.stringify({ type: 'get_player' }));
+        };
+
+        appState.ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                handleServerMessage(data);
+            } catch (e) {
+                console.error('Failed to parse WS message:', e);
+            }
+        };
+
+        appState.ws.onclose = (event) => {
+            document.getElementById('wsStatus').className = 'w-2 h-2 rounded-full bg-terminal-red';
+            document.getElementById('wsStatus').title = 'Disconnected';
+
+            // Auto-reconnect with exponential backoff
+            if (appState.reconnectAttempts < appState.maxReconnectAttempts) {
+                const delay = Math.min(1000 * Math.pow(1.5, appState.reconnectAttempts), 10000);
+                appState.reconnectAttempts++;
+                setTimeout(connectWebSocket, delay);
+            }
+        };
+
+        appState.ws.onerror = () => {
+            // Will trigger onclose
+        };
+    }
+
+    /**
+     * Handle incoming messages from the WebSocket.
+     * Messages are either:
+     *   - Full state updates (broadcast every tick)
+     *   - Trade results (in response to player trades)
+     *   - Player updates (in response to get_player requests)
+     */
+    function handleServerMessage(data) {
+        if (data.type === 'trade_result') {
+            handleTradeResult(data);
+            return;
+        }
+        if (data.type === 'player_update') {
+            updatePlayerDisplay(data.player);
+            if (data.analytics) updatePortfolio(data.analytics);
+            return;
+        }
+        if (data.type === 'da_bid_confirmed') {
+            const feedbackEl = document.getElementById('daFeedback');
+            feedbackEl.textContent = data.message || 'Bid confirmed';
+            feedbackEl.className = 'text-xs text-center mt-1.5 h-4 text-terminal-green';
+            showToast(data.message || 'DA bid submitted', 'success');
+            return;
+        }
+        if (data.error) {
+            showToast(data.error, 'error');
+            // Also update DA feedback if it was a DA error
+            const daFeedback = document.getElementById('daFeedback');
+            if (daFeedback && data.error.includes('DA')) {
+                daFeedback.textContent = data.error;
+                daFeedback.className = 'text-xs text-center mt-1.5 h-4 text-terminal-red';
+            }
+            return;
+        }
+
+        // Full state update (broadcast)
+        updateClock(data.tick, data.day);
+        if (data.game_speed !== undefined) updateGameSpeed(data.game_speed);
+        updatePrices(data.prices);
+        updateWeather(data.weather);
+        updateInterconnectors(data.interconnectors);
+        updateMapColors(data.prices);
+        updateMapFlows(data.interconnectors);
+        updatePriceChart(data.price_history);
+        updateLeaderboard(data.leaderboard);
+
+        // Periodically refresh player state to pick up self-discharge changes
+        if (data.tick % 10 === 0 && appState.ws && appState.ws.readyState === WebSocket.OPEN) {
+            appState.ws.send(JSON.stringify({ type: 'get_player' }));
+        }
+
+        // Weather forecast panel
+        if (data.forecasts) updateForecast(data.forecasts, data.weather);
+
+        // Game events — news ticker + active events bar
+        if (data.event_log) updateNewsTicker(data.event_log);
+        if (data.active_events) updateActiveEvents(data.active_events);
+
+        // Day-Ahead market status
+        if (data.da_market) updateDAMarket(data.da_market);
+
+        // Sound effect triggers (check for state changes)
+        checkSoundTriggers(data);
+
+        // Update player data if included (initial connect)
+        if (data.player) {
+            updatePlayerDisplay(data.player);
+        }
+        // Portfolio analytics if included (initial connect)
+        if (data.analytics) {
+            updatePortfolio(data.analytics);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // SECTION 4: LEAFLET MAP SETUP
+    // ─────────────────────────────────────────────────────────────────────
+
+    let map = null;
+    let countryLayers = {};    // zone_id → Leaflet GeoJSON layer
+    let countryLabels = {};    // zone_id → Leaflet marker (price label)
+    let flowLines = {};        // ic_id → Leaflet polyline
+    let flowLabels = {};       // ic_id → Leaflet marker (flow label)
+
+    // Country centroids for labels and interconnector lines
+    const ZONE_CENTERS = {
+        DE: [51.2, 10.4],
+        FR: [46.6, 2.5],
+        NL: [52.2, 5.3],
+        DK: [56.0, 9.5],
+        PL: [52.0, 19.5],
+    };
+
+    // Zone display metadata
+    const ZONE_META = {
+        DE: { name: 'Germany', flag: 'DE' },
+        FR: { name: 'France', flag: 'FR' },
+        NL: { name: 'Netherlands', flag: 'NL' },
+        DK: { name: 'Denmark', flag: 'DK' },
+        PL: { name: 'Poland', flag: 'PL' },
+    };
+
+    /**
+     * Simplified GeoJSON outlines for 5 countries.
+     * These are coarse but recognizable country shapes — good enough
+     * for the game map without loading a large external GeoJSON file.
+     * Each array contains [lat, lng] pairs defining the polygon boundary.
+     *
+     * Using inline data avoids CDN dependency issues and CORS problems.
+     */
+    const COUNTRY_SHAPES = {
+        DE: [[47.3,5.9],[47.3,7.5],[47.6,8.6],[47.6,10.2],[47.3,10.9],[47.4,12.1],[47.6,13.0],[48.5,13.7],[48.8,13.8],[49.5,12.5],[50.3,12.1],[50.4,12.9],[51.1,13.0],[51.4,14.6],[52.1,14.7],[52.6,14.1],[53.0,14.4],[53.9,14.2],[54.0,13.0],[54.3,11.4],[54.8,9.8],[54.9,8.6],[53.9,8.9],[53.5,8.2],[53.6,7.2],[52.3,7.0],[52.0,6.7],[51.8,6.2],[51.0,6.0],[50.3,6.1],[49.5,6.4],[49.0,6.2],[48.0,6.0],[47.6,7.5],[47.3,5.9]],
+        FR: [[42.4,-1.4],[42.5,3.0],[43.3,3.3],[43.6,4.0],[43.2,5.0],[43.7,7.4],[44.1,7.6],[45.0,6.8],[46.0,7.0],[46.5,6.5],[47.6,7.5],[47.3,5.9],[48.0,6.0],[49.0,6.2],[49.5,6.4],[50.3,6.1],[51.0,6.0],[51.0,2.5],[50.9,1.6],[48.8,-1.2],[48.5,-4.8],[47.3,-4.3],[46.3,-1.8],[44.4,-1.8],[43.3,-1.8],[42.4,-1.4]],
+        NL: [[51.4,3.4],[51.5,4.0],[51.8,4.2],[51.8,5.0],[51.5,5.8],[51.0,6.0],[51.8,6.2],[52.0,6.7],[52.3,7.0],[53.2,7.2],[53.5,5.5],[53.2,5.0],[52.3,4.6],[51.7,3.8],[51.4,3.4]],
+        DK: [[54.6,8.1],[54.8,9.8],[54.9,10.0],[55.0,10.6],[55.3,10.9],[55.6,10.6],[55.4,9.7],[55.7,9.1],[56.0,8.1],[56.6,8.2],[57.1,8.6],[57.6,10.0],[57.8,10.6],[56.5,12.6],[55.6,12.8],[55.2,12.1],[55.3,11.0],[55.0,10.6],[55.0,9.6],[54.8,9.8],[54.8,8.6],[54.6,8.1]],
+        PL: [[49.0,18.9],[49.4,20.1],[49.6,22.6],[50.4,24.0],[51.4,24.0],[52.1,23.9],[52.8,23.8],[53.5,23.8],[54.4,22.8],[54.8,19.6],[54.4,18.3],[54.8,16.5],[53.9,14.2],[53.0,14.4],[52.6,14.1],[52.1,14.7],[51.4,14.6],[51.1,13.0],[50.4,12.9],[50.3,12.1],[49.5,12.5],[49.0,13.8],[48.8,13.8],[48.5,13.7],[48.6,14.9],[48.6,17.0],[48.9,17.9],[49.0,18.9]],
+    };
+
+    function initMap() {
+        // Create Leaflet map centered on Germany
+        map = L.map('map', {
+            center: [51.5, 10.0],
+            zoom: 5,
+            minZoom: 4,
+            maxZoom: 7,
+            zoomControl: true,
+            attributionControl: false,
+        });
+
+        // Use a dark-themed tile layer (CartoDB dark matter)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            subdomains: 'abcd',
+            maxZoom: 19,
+        }).addTo(map);
+
+        // Disable the dark filter since we're using dark tiles directly
+        document.querySelector('.leaflet-tile-pane').style.filter = 'none';
+
+        // ── Draw country polygons (choropleth overlay) ──
+        for (const [zoneId, coords] of Object.entries(COUNTRY_SHAPES)) {
+            // Leaflet expects [lat, lng] which is what we have
+            const polygon = L.polygon(coords, {
+                color: '#1e293b',           // Border color
+                weight: 1.5,
+                fillColor: '#1e293b',       // Will be updated by price heatmap
+                fillOpacity: 0.5,
+                className: `zone-poly-${zoneId}`,
+            }).addTo(map);
+
+            countryLayers[zoneId] = polygon;
+
+            // ── Price label on each country ──
+            const center = ZONE_CENTERS[zoneId];
+            const label = L.marker(center, {
+                icon: L.divIcon({
+                    className: 'zone-label',
+                    html: `<strong>${zoneId}</strong> €—`,
+                    iconSize: null,
+                }),
+                interactive: false,
+            }).addTo(map);
+
+            countryLabels[zoneId] = label;
+        }
+
+        // ── Draw interconnector lines ──
+        const IC_DEFS = {
+            'DE-FR': { zones: ['DE', 'FR'] },
+            'DE-NL': { zones: ['DE', 'NL'] },
+            'DE-DK': { zones: ['DE', 'DK'] },
+            'DE-PL': { zones: ['DE', 'PL'] },
+        };
+
+        for (const [icId, def] of Object.entries(IC_DEFS)) {
+            const centerA = ZONE_CENTERS[def.zones[0]];
+            const centerB = ZONE_CENTERS[def.zones[1]];
+
+            // Draw the line
+            const line = L.polyline([centerA, centerB], {
+                color: '#3b82f6',
+                weight: 2.5,
+                opacity: 0.6,
+                dashArray: '8 4',
+            }).addTo(map);
+
+            flowLines[icId] = line;
+
+            // Flow label at midpoint
+            const midLat = (centerA[0] + centerB[0]) / 2;
+            const midLng = (centerA[1] + centerB[1]) / 2;
+
+            const flowLabel = L.marker([midLat, midLng], {
+                icon: L.divIcon({
+                    className: 'flow-label',
+                    html: '0 MW',
+                    iconSize: null,
+                }),
+                interactive: false,
+            }).addTo(map);
+
+            flowLabels[icId] = flowLabel;
+        }
+    }
+
+    /**
+     * Price-to-color mapping for the choropleth heatmap.
+     * Uses a green → yellow → red gradient:
+     *   - Negative/very cheap prices (< €0): bright green (surplus power)
+     *   - Normal prices (~€30-50): amber/yellow
+     *   - Expensive prices (> €80): deep red (scarcity)
+     *
+     * This visualization helps students quickly see which zones are cheap
+     * (green = buy opportunity) vs expensive (red = sell opportunity).
+     */
+    function priceToColor(price) {
+        // Normalize price to 0-1 range: -20 → 0 (green), 100 → 1 (red)
+        const t = Math.max(0, Math.min(1, (price + 20) / 120));
+
+        // HSL interpolation: green (120°) → yellow (60°) → red (0°)
+        const hue = (1 - t) * 120;
+        const saturation = 80 + t * 20;  // More saturated at extremes
+        const lightness = 35 + (1 - Math.abs(t - 0.5) * 2) * 15;  // Brighter in middle
+
+        return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    }
+
+    function updateMapColors(prices) {
+        if (!map) return;
+
+        for (const [zoneId, price] of Object.entries(prices)) {
+            if (countryLayers[zoneId]) {
+                const color = priceToColor(price);
+                countryLayers[zoneId].setStyle({
+                    fillColor: color,
+                    fillOpacity: 0.55,
+                    color: color,
+                    weight: zoneId === 'DE' ? 2.5 : 1.5,  // Highlight Germany
+                });
+            }
+
+            // Update price label
+            if (countryLabels[zoneId]) {
+                const priceStr = price < 0 ? `-€${Math.abs(price).toFixed(0)}` : `€${price.toFixed(0)}`;
+                const color = price < 0 ? '#00ff88' : (price > 70 ? '#ff4444' : '#e2e8f0');
+                countryLabels[zoneId].setIcon(L.divIcon({
+                    className: 'zone-label',
+                    html: `<strong>${zoneId}</strong> <span style="color:${color}">${priceStr}</span>`,
+                    iconSize: null,
+                }));
+            }
+        }
+    }
+
+    function updateMapFlows(interconnectors) {
+        if (!map) return;
+
+        for (const [icId, ic] of Object.entries(interconnectors)) {
+            const flowMw = ic.flow_mw;
+            const maxCap = ic.max_capacity_mw;
+            const congested = ic.is_congested;
+
+            // Update line style
+            if (flowLines[icId]) {
+                const absFlow = Math.abs(flowMw);
+                const utilization = absFlow / maxCap;
+
+                flowLines[icId].setStyle({
+                    color: congested ? '#ff4444' : (utilization > 0.5 ? '#ffaa00' : '#3b82f6'),
+                    weight: 2 + utilization * 3,
+                    opacity: 0.5 + utilization * 0.5,
+                    dashArray: congested ? null : '8 4',  // Solid line when congested
+                });
+            }
+
+            // Update flow label
+            if (flowLabels[icId]) {
+                const absFlow = Math.abs(flowMw);
+                let arrow = '';
+                if (flowMw > 50) arrow = `${ic.zone_a}→${ic.zone_b}`;
+                else if (flowMw < -50) arrow = `${ic.zone_b}→${ic.zone_a}`;
+                else arrow = '—';
+
+                const gwStr = (absFlow / 1000).toFixed(1);
+                const maxGwStr = (maxCap / 1000).toFixed(1);
+                const label = congested
+                    ? `${arrow} ${gwStr} GW (MAX!)`
+                    : `${arrow} ${gwStr}/${maxGwStr} GW`;
+
+                flowLabels[icId].setIcon(L.divIcon({
+                    className: `flow-label ${congested ? 'congested' : ''}`,
+                    html: label,
+                    iconSize: null,
+                }));
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // SECTION 5: CHART.JS PRICE HISTORY
+    // ─────────────────────────────────────────────────────────────────────
+
+    let priceChart = null;
+
+    const ZONE_CHART_COLORS = {
+        DE: { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' },   // Blue (primary)
+        FR: { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)' },    // Red
+        NL: { border: '#f97316', bg: 'rgba(249, 115, 22, 0.1)' },   // Orange
+        DK: { border: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' },   // Green
+        PL: { border: '#a855f7', bg: 'rgba(168, 85, 247, 0.1)' },   // Purple
+    };
+
+    function initChart() {
+        const ctx = document.getElementById('priceChart').getContext('2d');
+
+        // Custom plugin: draw a horizontal dashed line at the player's
+        // average buy price. This gives instant visual feedback on whether
+        // the current price is above or below their cost basis.
+        const avgBuyLinePlugin = {
+            id: 'avgBuyLine',
+            afterDraw(chart) {
+                const avgPrice = chart._avgBuyPrice;
+                if (!avgPrice) return;
+
+                const yScale = chart.scales.y;
+                const xScale = chart.scales.x;
+                const y = yScale.getPixelForValue(avgPrice);
+
+                // Only draw if within visible area
+                if (y < yScale.top || y > yScale.bottom) return;
+
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.beginPath();
+                ctx.setLineDash([6, 4]);
+                ctx.strokeStyle = '#ffaa00';
+                ctx.lineWidth = 1.5;
+                ctx.globalAlpha = 0.7;
+                ctx.moveTo(xScale.left, y);
+                ctx.lineTo(xScale.right, y);
+                ctx.stroke();
+
+                // Label
+                ctx.setLineDash([]);
+                ctx.fillStyle = '#ffaa00';
+                ctx.font = "9px 'JetBrains Mono', monospace";
+                ctx.globalAlpha = 0.9;
+                ctx.fillText(`Avg Buy €${avgPrice.toFixed(0)}`, xScale.right - 80, y - 4);
+                ctx.restore();
+            }
+        };
+
+        priceChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: Object.entries(ZONE_CHART_COLORS).map(([zone, colors]) => ({
+                    label: zone,
+                    data: [],
+                    borderColor: colors.border,
+                    backgroundColor: colors.bg,
+                    borderWidth: zone === 'DE' ? 2.5 : 1.5,
+                    fill: zone === 'DE',
+                    tension: 0.3,
+                    pointRadius: 0,
+                    pointHitRadius: 8,
+                })),
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 300 },
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            color: '#64748b',
+                            font: { family: "'JetBrains Mono'", size: 10 },
+                            boxWidth: 12,
+                            padding: 8,
+                        },
+                    },
+                    tooltip: {
+                        backgroundColor: '#111827',
+                        borderColor: '#1e293b',
+                        borderWidth: 1,
+                        titleFont: { family: "'JetBrains Mono'", size: 11 },
+                        bodyFont: { family: "'JetBrains Mono'", size: 10 },
+                        callbacks: {
+                            label: (ctx) => `${ctx.dataset.label}: €${ctx.parsed.y.toFixed(2)}/MWh`,
+                        },
+                    },
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        grid: { color: 'rgba(30, 41, 59, 0.5)' },
+                        ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 12 },
+                    },
+                    y: {
+                        display: true,
+                        grid: { color: 'rgba(30, 41, 59, 0.5)' },
+                        ticks: {
+                            color: '#64748b',
+                            font: { size: 9 },
+                            callback: (val) => `€${val}`,
+                        },
+                    },
+                },
+            },
+            plugins: [avgBuyLinePlugin],
+        });
+    }
+
+    function updatePriceChart(priceHistory) {
+        if (!priceChart || !priceHistory) return;
+
+        // Use DE history length for labels
+        const deHistory = priceHistory.DE || [];
+        const len = deHistory.length;
+
+        // Generate hour labels
+        const labels = [];
+        for (let i = 0; i < len; i++) {
+            labels.push(`${i}h`);
+        }
+
+        priceChart.data.labels = labels;
+
+        // Update each zone's dataset
+        const zoneOrder = ['DE', 'FR', 'NL', 'DK', 'PL'];
+        zoneOrder.forEach((zone, idx) => {
+            if (priceChart.data.datasets[idx]) {
+                priceChart.data.datasets[idx].data = priceHistory[zone] || [];
+            }
+        });
+
+        priceChart.update('none');  // No animation for real-time updates
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // SECTION 5B: CHART.JS BATTERY HEALTH
+    // ─────────────────────────────────────────────────────────────────────
+
+    let healthChart = null;
+
+    function initHealthChart() {
+        const ctx = document.getElementById('healthChart').getContext('2d');
+
+        // Custom plugin: draw horizontal reference lines at 80% and 70% SoH
+        const sohRefLinesPlugin = {
+            id: 'sohRefLines',
+            afterDraw(chart) {
+                const yScale = chart.scales.y;
+                const xScale = chart.scales.x;
+                const ctx = chart.ctx;
+
+                // 80% — warranty threshold
+                const y80 = yScale.getPixelForValue(80);
+                if (y80 >= yScale.top && y80 <= yScale.bottom) {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.setLineDash([4, 3]);
+                    ctx.strokeStyle = '#f59e0b';
+                    ctx.lineWidth = 1;
+                    ctx.globalAlpha = 0.5;
+                    ctx.moveTo(xScale.left, y80);
+                    ctx.lineTo(xScale.right, y80);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.fillStyle = '#f59e0b';
+                    ctx.font = "8px 'JetBrains Mono', monospace";
+                    ctx.globalAlpha = 0.7;
+                    ctx.fillText('80% warranty', xScale.left + 4, y80 - 3);
+                    ctx.restore();
+                }
+
+                // 70% — end of life
+                const y70 = yScale.getPixelForValue(70);
+                if (y70 >= yScale.top && y70 <= yScale.bottom) {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.setLineDash([4, 3]);
+                    ctx.strokeStyle = '#ef4444';
+                    ctx.lineWidth = 1;
+                    ctx.globalAlpha = 0.5;
+                    ctx.moveTo(xScale.left, y70);
+                    ctx.lineTo(xScale.right, y70);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.fillStyle = '#ef4444';
+                    ctx.font = "8px 'JetBrains Mono', monospace";
+                    ctx.globalAlpha = 0.7;
+                    ctx.fillText('70% EOL', xScale.left + 4, y70 - 3);
+                    ctx.restore();
+                }
+            }
+        };
+
+        healthChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'SoH %',
+                        data: [],
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHitRadius: 6,
+                        yAxisID: 'y',
+                    },
+                    {
+                        label: 'RT Eff %',
+                        data: [],
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.05)',
+                        borderWidth: 1.5,
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHitRadius: 6,
+                        borderDash: [4, 2],
+                        yAxisID: 'y',
+                    },
+                    {
+                        label: 'Eff. Cap (GWh)',
+                        data: [],
+                        borderColor: '#a855f7',
+                        backgroundColor: 'rgba(168, 85, 247, 0.05)',
+                        borderWidth: 1,
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHitRadius: 6,
+                        borderDash: [2, 2],
+                        yAxisID: 'y2',
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 300 },
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            color: '#64748b',
+                            font: { family: "'JetBrains Mono'", size: 9 },
+                            boxWidth: 10,
+                            padding: 6,
+                        },
+                    },
+                    tooltip: {
+                        backgroundColor: '#111827',
+                        borderColor: '#1e293b',
+                        borderWidth: 1,
+                        titleFont: { family: "'JetBrains Mono'", size: 10 },
+                        bodyFont: { family: "'JetBrains Mono'", size: 9 },
+                        callbacks: {
+                            label: (ctx) => {
+                                if (ctx.datasetIndex === 2) return `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)} GWh`;
+                                return `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}%`;
+                            },
+                        },
+                    },
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        grid: { color: 'rgba(30, 41, 59, 0.5)' },
+                        ticks: { color: '#64748b', font: { size: 8 }, maxTicksLimit: 8 },
+                    },
+                    y: {
+                        display: true,
+                        position: 'left',
+                        min: 65,
+                        max: 102,
+                        grid: { color: 'rgba(30, 41, 59, 0.5)' },
+                        ticks: {
+                            color: '#64748b',
+                            font: { size: 8 },
+                            callback: (val) => `${val}%`,
+                        },
+                        title: {
+                            display: false,
+                        },
+                    },
+                    y2: {
+                        display: true,
+                        position: 'right',
+                        min: 30,
+                        max: 55,
+                        grid: { drawOnChartArea: false },
+                        ticks: {
+                            color: '#a855f7',
+                            font: { size: 8 },
+                            callback: (val) => `${val}`,
+                        },
+                        title: {
+                            display: false,
+                        },
+                    },
+                },
+            },
+            plugins: [sohRefLinesPlugin],
+        });
+    }
+
+    function updateHealthChart(sohHistory) {
+        if (!healthChart || !sohHistory || sohHistory.length === 0) return;
+
+        const labels = sohHistory.map((s, i) => {
+            if (i === 0 || i === sohHistory.length - 1 || i % Math.max(1, Math.floor(sohHistory.length / 8)) === 0) {
+                return `D${s.day}:${String(s.tick).padStart(2, '0')}`;
+            }
+            return '';
+        });
+
+        healthChart.data.labels = labels;
+        healthChart.data.datasets[0].data = sohHistory.map(s => s.soh * 100);
+        healthChart.data.datasets[1].data = sohHistory.map(s => (s.rt_eff || 0.9) * 100);
+        healthChart.data.datasets[2].data = sohHistory.map(s => (s.soh * 50000) / 1000); // GWh
+
+        // Dynamic color for SoH line based on latest value
+        const latestSoh = sohHistory[sohHistory.length - 1].soh;
+        if (latestSoh < 0.75) {
+            healthChart.data.datasets[0].borderColor = '#ef4444';
+            healthChart.data.datasets[0].backgroundColor = 'rgba(239, 68, 68, 0.08)';
+        } else if (latestSoh < 0.85) {
+            healthChart.data.datasets[0].borderColor = '#f59e0b';
+            healthChart.data.datasets[0].backgroundColor = 'rgba(245, 158, 11, 0.08)';
+        } else {
+            healthChart.data.datasets[0].borderColor = '#10b981';
+            healthChart.data.datasets[0].backgroundColor = 'rgba(16, 185, 129, 0.08)';
+        }
+
+        healthChart.update('none');
+    }
+
+    function updateBatteryHealth(player) {
+        if (!player) return;
+
+        const soh = player.battery_soh || 1.0;
+        const cycles = player.battery_cycles || 0;
+        const effectiveCap = player.effective_capacity_mwh || 50000;
+        const rtEff = player.rt_efficiency || 0.9;
+        const sohHistory = player.soh_history || [];
+
+        // SoH percentage text + color
+        const sohEl = document.getElementById('sohPctText');
+        sohEl.textContent = `${(soh * 100).toFixed(1)}% SoH`;
+        if (soh < 0.75) sohEl.className = 'text-terminal-red text-xs font-bold';
+        else if (soh < 0.85) sohEl.className = 'text-terminal-amber text-xs font-bold';
+        else sohEl.className = 'text-terminal-green text-xs font-bold';
+
+        // Cycle count
+        document.getElementById('cycleCount').textContent =
+            `${cycles.toFixed(1)} / 5,000`;
+
+        // Effective capacity
+        document.getElementById('effectiveCapacity').textContent =
+            `${Math.round(effectiveCap).toLocaleString()} MWh`;
+
+        // Round-trip efficiency
+        const rtEl = document.getElementById('rtEfficiency');
+        rtEl.textContent = `${(rtEff * 100).toFixed(1)}%`;
+        if (rtEff < 0.85) rtEl.className = 'font-bold text-terminal-red';
+        else if (rtEff < 0.88) rtEl.className = 'font-bold text-terminal-amber';
+        else rtEl.className = 'font-bold text-white';
+
+        // Update health chart
+        updateHealthChart(sohHistory);
+
+        // Taper warning
+        const taperMult = player.taper_mult;
+        const taperEl = document.getElementById('taperWarning');
+        if (taperMult !== undefined && taperMult < 1.0) {
+            taperEl.classList.remove('hidden');
+            document.getElementById('taperPctText').textContent = `${Math.round(taperMult * 100)}%`;
+        } else {
+            taperEl.classList.add('hidden');
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // SECTION 6: UI UPDATE FUNCTIONS
+    // ─────────────────────────────────────────────────────────────────────
+
+    function updateClock(tick, day) {
+        document.getElementById('headerDay').textContent = day;
+        const hourStr = String(tick).padStart(2, '0') + ':00';
+        document.getElementById('headerHour').textContent = hourStr;
+    }
+
+    function updateGameSpeed(speed) {
+        const el = document.getElementById('headerSpeed');
+        if (!speed || speed === 1.0) {
+            el.classList.add('hidden');
+        } else {
+            el.classList.remove('hidden');
+            el.textContent = '[' + speed + 'x]';
+        }
+    }
+
+    function updatePrices(prices) {
+        const dePrice = prices.DE || 0;
+        const priceEl = document.getElementById('dePriceLarge');
+        const priceStr = dePrice < 0
+            ? `-€${Math.abs(dePrice).toFixed(2)}`
+            : `€${dePrice.toFixed(2)}`;
+        priceEl.textContent = priceStr;
+
+        // Color based on price level
+        if (dePrice < 0) priceEl.className = 'text-3xl font-bold text-terminal-green mt-1';
+        else if (dePrice > 70) priceEl.className = 'text-3xl font-bold text-terminal-red mt-1';
+        else if (dePrice > 55) priceEl.className = 'text-3xl font-bold text-terminal-amber mt-1';
+        else priceEl.className = 'text-3xl font-bold text-terminal-cyan mt-1';
+
+        // Update cost preview
+        updateCostPreview(dePrice);
+
+        // Update zone prices table
+        updateZonePricesTable(prices);
+    }
+
+    function updateWeather(weather) {
+        if (!weather) return;
+
+        // DE weather in sidebar
+        const de = weather.DE;
+        if (de) {
+            document.getElementById('deWind').textContent = de.wind_speed.toFixed(1);
+            document.getElementById('deSolar').textContent = `${Math.round(de.solar_irradiance * 100)}%`;
+            document.getElementById('deTemp').textContent = `${de.temperature.toFixed(0)}°C`;
+        }
+
+        // Add storm indicators to weather info
+        for (const [zoneId, w] of Object.entries(weather)) {
+            if (zoneId === 'DE') {
+                const windEl = document.getElementById('deWind');
+                if (w.storm_active) {
+                    windEl.classList.add('storm-active');
+                    windEl.style.color = '#ff4444';
+                } else {
+                    windEl.classList.remove('storm-active');
+                    windEl.style.color = '';
+                }
+            }
+        }
+
+        // Store for zone table
+        appState.lastWeather = weather;
+    }
+
+    function updateZonePricesTable(prices) {
+        const tbody = document.getElementById('zonePricesBody');
+        const weather = appState.lastWeather || {};
+
+        let html = '';
+        for (const zone of ['DE', 'FR', 'NL', 'DK', 'PL']) {
+            const price = prices[zone] || 0;
+            const w = weather[zone] || {};
+            const priceColor = price < 0 ? 'text-terminal-green' : (price > 70 ? 'text-terminal-red' : 'text-white');
+            const priceStr = price < 0 ? `-€${Math.abs(price).toFixed(1)}` : `€${price.toFixed(1)}`;
+            const windStr = (w.wind_speed || 0).toFixed(1);
+            const stormBadge = w.storm_active
+                ? '<span class="storm-active text-terminal-red">STORM</span>'
+                : '<span class="text-terminal-muted">—</span>';
+
+            html += `
+                <tr class="border-b border-terminal-border/30">
+                    <td class="py-1 ${zone === 'DE' ? 'text-terminal-blue font-bold' : ''}">${zone}</td>
+                    <td class="py-1 text-right ${priceColor} font-medium">${priceStr}</td>
+                    <td class="py-1 text-right">${windStr}</td>
+                    <td class="py-1 text-center">${stormBadge}</td>
+                </tr>
+            `;
+        }
+        tbody.innerHTML = html;
+    }
+
+    function updateInterconnectors(interconnectors) {
+        const container = document.getElementById('interconnectorList');
+        let html = '';
+
+        for (const [icId, ic] of Object.entries(interconnectors)) {
+            const absFlow = Math.abs(ic.flow_mw);
+            const gwFlow = (absFlow / 1000).toFixed(1);
+            const maxGw = (ic.max_capacity_mw / 1000).toFixed(1);
+            const utilPct = Math.round((absFlow / ic.max_capacity_mw) * 100);
+
+            let direction = '';
+            if (ic.flow_mw > 50) direction = `${ic.zone_a} → ${ic.zone_b}`;
+            else if (ic.flow_mw < -50) direction = `${ic.zone_b} → ${ic.zone_a}`;
+            else direction = `${ic.zone_a} ↔ ${ic.zone_b}`;
+
+            const barColor = ic.is_congested ? 'bg-terminal-red' : (utilPct > 50 ? 'bg-terminal-amber' : 'bg-terminal-blue');
+            const labelColor = ic.is_congested ? 'text-terminal-red font-bold' : 'text-white';
+
+            html += `
+                <div class="text-xs">
+                    <div class="flex justify-between mb-1">
+                        <span class="${labelColor}">${direction}</span>
+                        <span class="${labelColor}">${gwFlow}/${maxGw} GW ${ic.is_congested ? '(MAX!)' : ''}</span>
+                    </div>
+                    <div class="w-full h-1.5 bg-terminal-bg rounded overflow-hidden">
+                        <div class="${barColor} h-full rounded transition-all duration-500" style="width: ${utilPct}%"></div>
+                    </div>
+                </div>
+            `;
+        }
+        container.innerHTML = html;
+    }
+
+    function updatePlayerDisplay(player) {
+        if (!player) return;
+        appState.player = player;
+
+        // Cash
+        const cashStr = player.cash < 0
+            ? `-€${Math.abs(player.cash).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : `€${player.cash.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        document.getElementById('cashDisplay').textContent = cashStr;
+
+        // Realized PnL in header
+        const realizedPnl = player.realized_pnl || 0;
+        const realizedStr = realizedPnl < 0
+            ? `-€${Math.abs(realizedPnl).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : `€${realizedPnl.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const realizedEl = document.getElementById('headerRealizedPnl');
+        realizedEl.textContent = realizedStr;
+        realizedEl.className = `font-bold ${realizedPnl >= 0 ? 'text-terminal-green' : 'text-terminal-red'}`;
+
+        // Floating PnL in header
+        const floatingPnl = player.floating_pnl || 0;
+        const floatingStr = floatingPnl < 0
+            ? `-€${Math.abs(floatingPnl).toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : `€${floatingPnl.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const floatingEl = document.getElementById('headerFloatingPnl');
+        floatingEl.textContent = floatingStr;
+        floatingEl.className = `font-bold ${floatingPnl >= 0 ? 'text-terminal-green' : 'text-terminal-red'}`;
+
+        // Battery gauge — use effective capacity if available
+        const effectiveCap = player.effective_capacity_mwh || 50000;
+        const pct = (player.battery_mwh / effectiveCap) * 100;
+        const batteryFill = document.getElementById('batteryFill');
+        batteryFill.style.width = `${Math.min(pct, 100)}%`;
+
+        // Battery color: red < 20% < yellow < 40% < green < 80% < blue
+        let batteryColor;
+        if (pct < 20) batteryColor = '#ef4444';      // Red
+        else if (pct < 40) batteryColor = '#f59e0b';  // Amber
+        else if (pct < 80) batteryColor = '#10b981';  // Green
+        else batteryColor = '#3b82f6';                 // Blue
+
+        batteryFill.style.background = batteryColor;
+
+        document.getElementById('batteryPctText').textContent = `${Math.min(pct, 100).toFixed(1)}%`;
+        document.getElementById('batteryMwhText').textContent =
+            `${Math.round(player.battery_mwh).toLocaleString()} / ${Math.round(effectiveCap).toLocaleString()} MWh`;
+
+        // Max rate display (considering taper)
+        const taperMult = player.taper_mult;
+        if (taperMult !== undefined && taperMult < 1.0) {
+            const maxGw = (10 * taperMult).toFixed(1);
+            document.getElementById('maxRateDisplay').innerHTML =
+                `<span class="text-terminal-amber">${maxGw} GW</span> <span class="text-terminal-muted">(tapered)</span>`;
+        } else {
+            document.getElementById('maxRateDisplay').textContent = '10 GW';
+        }
+
+        // Update battery health panel
+        updateBatteryHealth(player);
+    }
+
+    function updateLeaderboard(leaderboard) {
+        if (!leaderboard) return;
+
+        const tbody = document.getElementById('leaderboardBody');
+        let html = '';
+
+        for (const entry of leaderboard) {
+            const isMe = entry.username === appState.username;
+            const realizedPnl = entry.realized_pnl || 0;
+            const floatingPnl = entry.floating_pnl || 0;
+            const realizedColor = realizedPnl >= 0 ? 'text-terminal-green' : 'text-terminal-red';
+            const floatingColor = floatingPnl >= 0 ? 'text-terminal-green' : 'text-terminal-red';
+            const realizedStr = realizedPnl < 0
+                ? `-€${Math.abs(realizedPnl).toLocaleString('en', { maximumFractionDigits: 0 })}`
+                : `€${realizedPnl.toLocaleString('en', { maximumFractionDigits: 0 })}`;
+            const floatingStr = floatingPnl < 0
+                ? `-€${Math.abs(floatingPnl).toLocaleString('en', { maximumFractionDigits: 0 })}`
+                : `€${floatingPnl.toLocaleString('en', { maximumFractionDigits: 0 })}`;
+            const battPct = Math.round((entry.battery_mwh / 50000) * 100);
+
+            html += `
+                <tr class="lb-row border-b border-terminal-border/30 ${isMe ? 'bg-terminal-green/5' : ''}">
+                    <td class="py-1 lb-rank font-bold">${entry.rank}</td>
+                    <td class="py-1 ${isMe ? 'text-terminal-green font-bold' : ''}">${entry.username}</td>
+                    <td class="py-1 text-right ${realizedColor} font-medium">${realizedStr}</td>
+                    <td class="py-1 text-right ${floatingColor} font-medium">${floatingStr}</td>
+                    <td class="py-1 text-right text-terminal-muted">${battPct}%</td>
+                </tr>
+            `;
+        }
+        tbody.innerHTML = html;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // SECTION 6B: WEATHER FORECAST DISPLAY (NEW)
+    // ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * Update the weather forecast panel with:
+     * 1. Forecast-vs-actual deviation indicators for the current hour
+     * 2. Sparkline bars showing 6-hour wind forecast per zone
+     * 3. Storm warnings when forecast predicts high wind
+     *
+     * This is the core UX that helps students anticipate price moves:
+     * - If actual wind >> forecasted wind → prices will drop (surprise surplus)
+     * - If actual wind << forecasted wind → prices will rise (surprise shortage)
+     * - The color coding makes deviations immediately visible
+     */
+    function updateForecast(forecasts, weather) {
+        if (!forecasts || !weather) return;
+
+        // ── 1. Forecast-vs-Actual deviation display ──
+        const deviationRows = document.getElementById('deviationRows');
+        let devHtml = '';
+        const zoneNames = { DE: 'DE', FR: 'FR', NL: 'NL', DK: 'DK', PL: 'PL' };
+
+        for (const zone of ['DE', 'DK', 'NL', 'FR', 'PL']) {
+            const w = weather[zone];
+            if (!w) continue;
+
+            const actual = w.wind_speed;
+            const forecast = w.forecasted_wind;
+            const diff = actual - forecast;
+            const absDiff = Math.abs(diff);
+
+            // Color code by deviation magnitude
+            // < 1 m/s: green (forecast was accurate)
+            // 1-3 m/s: amber (notable deviation — watch for price impact)
+            // > 3 m/s: red (major surprise — trading opportunity!)
+            let devColor, devIcon;
+            if (absDiff < 1.0) {
+                devColor = 'text-terminal-green';
+                devIcon = '~';  // approximately correct
+            } else if (absDiff < 3.0) {
+                devColor = 'text-terminal-amber';
+                devIcon = diff > 0 ? '&#9650;' : '&#9660;';  // up/down arrow
+            } else {
+                devColor = 'text-terminal-red';
+                devIcon = diff > 0 ? '&#9650;&#9650;' : '&#9660;&#9660;';  // double arrow
+            }
+
+            const diffStr = diff > 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1);
+
+            devHtml += `
+                <div class="flex justify-between items-center">
+                    <span class="${zone === 'DE' ? 'text-terminal-blue font-bold' : 'text-terminal-muted'}">${zone} Wind</span>
+                    <span>
+                        <span class="text-white">${actual.toFixed(1)}</span>
+                        <span class="text-terminal-muted"> vs </span>
+                        <span class="text-terminal-muted">${forecast.toFixed(1)}</span>
+                        <span class="${devColor} font-bold ml-1">${devIcon} ${diffStr}</span>
+                    </span>
+                </div>
+            `;
+        }
+        deviationRows.innerHTML = devHtml;
+
+        // ── 2. Sparkline bars for 6-hour forecast ──
+        const sparklinesEl = document.getElementById('forecastSparklines');
+        let sparkHtml = '';
+
+        for (const zone of ['DE', 'DK', 'NL']) {
+            const zoneForecast = forecasts[zone];
+            if (!zoneForecast || zoneForecast.length === 0) continue;
+
+            // Find max wind across all forecasts for scaling
+            const maxWind = Math.max(20, ...zoneForecast.map(f => f.wind));
+
+            const bars = zoneForecast.map((f, i) => {
+                const pct = Math.round((f.wind / maxWind) * 100);
+                const isHigh = f.wind > 12;
+                const barColor = isHigh ? 'bg-terminal-red' : (f.wind > 8 ? 'bg-terminal-amber' : 'bg-terminal-blue');
+                const hourLabel = String(f.hour).padStart(2, '0');
+                return `<div class="flex flex-col items-center gap-0.5" title="${hourLabel}:00 — ${f.wind} m/s">
+                    <div class="w-3 bg-terminal-bg rounded-sm overflow-hidden" style="height: 20px;">
+                        <div class="${barColor} w-full rounded-sm" style="height: ${pct}%; margin-top: ${100-pct}%;"></div>
+                    </div>
+                    <span class="text-terminal-muted" style="font-size: 7px;">${hourLabel}</span>
+                </div>`;
+            }).join('');
+
+            sparkHtml += `
+                <div class="flex items-center gap-2">
+                    <span class="text-xs ${zone === 'DE' ? 'text-terminal-blue font-bold' : 'text-terminal-muted'} w-6">${zone}</span>
+                    <div class="flex gap-1">${bars}</div>
+                    <span class="text-xs text-terminal-muted ml-auto">${zoneForecast[zoneForecast.length-1].wind} m/s</span>
+                </div>
+            `;
+        }
+        sparklinesEl.innerHTML = sparkHtml;
+
+        // ── 3. Storm warnings ──
+        const stormWarnings = document.getElementById('stormWarnings');
+        const stormText = document.getElementById('stormWarningText');
+        const warnings = [];
+
+        for (const zone of ['DE', 'FR', 'NL', 'DK', 'PL']) {
+            const zoneForecast = forecasts[zone];
+            if (!zoneForecast) continue;
+
+            // Check if any forecasted wind exceeds storm threshold (14+ m/s)
+            for (let i = 0; i < zoneForecast.length; i++) {
+                if (zoneForecast[i].wind >= 14) {
+                    warnings.push(`${zone}: High wind (${zoneForecast[i].wind} m/s) in ~${i+1}h`);
+                    break;  // One warning per zone
+                }
+            }
+        }
+
+        if (warnings.length > 0) {
+            stormWarnings.classList.remove('hidden');
+            stormText.innerHTML = warnings.map(w => `&#9888; ${w}`).join('<br>');
+        } else {
+            stormWarnings.classList.add('hidden');
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // SECTION 6C: PORTFOLIO ANALYTICS DISPLAY (NEW)
+    // ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * Update the portfolio analytics panel with:
+     * 1. Weighted average buy/sell prices
+     * 2. Spread (sell - buy) — the player's per-MWh profitability
+     * 3. Total volumes and trade count
+     * 4. Recent trades log
+     * 5. "vs your avg" indicator on the German price panel
+     * 6. Horizontal avg-buy-price line on the price chart
+     *
+     * The key decision-support metric: if current DE price > avg buy price,
+     * the player can sell profitably. This turns an abstract PnL number
+     * into an intuitive "is now a good time to trade?" signal.
+     */
+    function updatePortfolio(analytics) {
+        if (!analytics) return;
+        appState.analytics = analytics;
+
+        // ── Avg buy/sell prices ──
+        const avgBuy = analytics.avg_buy_price || 0;
+        const avgSell = analytics.avg_sell_price || 0;
+
+        document.getElementById('avgBuyPrice').textContent =
+            analytics.buy_count > 0 ? `€${avgBuy.toFixed(2)}` : '—';
+        document.getElementById('avgSellPrice').textContent =
+            analytics.sell_count > 0 ? `€${avgSell.toFixed(2)}` : '—';
+
+        // ── Spread ──
+        const spreadEl = document.getElementById('portfolioSpread');
+        if (analytics.buy_count > 0 && analytics.sell_count > 0) {
+            const spread = avgSell - avgBuy;
+            const spreadColor = spread >= 0 ? 'text-terminal-green' : 'text-terminal-red';
+            const sign = spread >= 0 ? '+' : '';
+            spreadEl.textContent = `${sign}€${spread.toFixed(2)}/MWh`;
+            spreadEl.className = `font-bold ${spreadColor}`;
+        } else {
+            spreadEl.textContent = '—';
+            spreadEl.className = 'font-bold text-terminal-muted';
+        }
+
+        // ── Volumes ──
+        document.getElementById('totalBought').textContent =
+            `${Math.round(analytics.total_bought_mwh).toLocaleString()} MWh (${analytics.buy_count})`;
+        document.getElementById('totalSold').textContent =
+            `${Math.round(analytics.total_sold_mwh).toLocaleString()} MWh (${analytics.sell_count})`;
+        document.getElementById('tradeCount').textContent =
+            `${analytics.buy_count + analytics.sell_count}`;
+
+        // ── Recent trades log ──
+        const logEl = document.getElementById('recentTradesLog');
+        if (analytics.recent_trades && analytics.recent_trades.length > 0) {
+            let logHtml = '';
+            for (const trade of analytics.recent_trades) {
+                const isBuy = trade.action === 'BUY';
+                const color = isBuy ? 'text-terminal-green' : 'text-terminal-red';
+                const icon = isBuy ? '&#9650;' : '&#9660;';
+                const hourStr = String(trade.tick).padStart(2, '0') + ':00';
+                logHtml += `
+                    <div class="flex justify-between ${color}">
+                        <span>D${trade.day} ${hourStr} ${icon} ${trade.action} ${Math.round(trade.mw).toLocaleString()} MW</span>
+                        <span>€${trade.price.toFixed(1)}</span>
+                    </div>
+                `;
+            }
+            logEl.innerHTML = logHtml;
+        } else {
+            logEl.innerHTML = '<div class="text-terminal-muted">No trades yet</div>';
+        }
+
+        // ── "vs your avg" on German Price panel ──
+        updateVsAvgIndicator(avgBuy, analytics.buy_count);
+
+        // ── Update chart annotation line ──
+        updateChartAvgLine(avgBuy, analytics.buy_count);
+    }
+
+    /**
+     * Show "vs your avg buy: +€6.15" below the German spot price.
+     * Green if current price is above avg buy (profitable to sell).
+     * Red if current price is below avg buy (underwater).
+     */
+    function updateVsAvgIndicator(avgBuy, buyCount) {
+        const indicator = document.getElementById('vsAvgIndicator');
+        const textEl = document.getElementById('vsAvgText');
+
+        if (buyCount <= 0 || avgBuy <= 0) {
+            indicator.classList.add('hidden');
+            return;
+        }
+
+        // Get current DE price
+        const priceText = document.getElementById('dePriceLarge').textContent;
+        const currentPrice = parseFloat(priceText.replace(/[^\d.-]/g, '')) || 0;
+        const diff = currentPrice - avgBuy;
+        const sign = diff >= 0 ? '+' : '';
+        const color = diff >= 0 ? 'text-terminal-green' : 'text-terminal-red';
+
+        textEl.textContent = `${sign}€${diff.toFixed(2)}/MWh`;
+        textEl.className = `font-bold ${color}`;
+        indicator.classList.remove('hidden');
+    }
+
+    /**
+     * Draw a horizontal dashed line on the price chart at the player's
+     * weighted average buy price. This gives a visual reference for
+     * "am I above or below my cost basis?"
+     *
+     * Uses Chart.js's afterDraw plugin hook — no extra dependency needed.
+     */
+    function updateChartAvgLine(avgBuy, buyCount) {
+        if (!priceChart) return;
+
+        // Store the avg buy price for the chart plugin to read
+        priceChart._avgBuyPrice = (buyCount > 0 && avgBuy > 0) ? avgBuy : null;
+        priceChart.update('none');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // SECTION 6D: GAME EVENTS DISPLAY (NEW)
+    // ─────────────────────────────────────────────────────────────────────
+
+    // Event type → icon mapping for the ticker
+    const EVENT_ICONS = {
+        plant_outage: '&#9888;',        // Warning sign
+        demand_shock_heat: '&#9728;',   // Sun
+        demand_shock_cold: '&#10052;',  // Snowflake
+        carbon_price_spike: '&#9729;',  // Cloud (CO2)
+        interconnector_fault: '&#9889;', // Lightning (cable)
+        renewable_subsidy: '&#9879;',   // Anchor (policy)
+        lng_cargo_arrival: '&#9875;',   // Ship
+        grid_emergency: '&#9888;',      // Warning
+    };
+
+    const EVENT_COLORS = {
+        plant_outage: 'text-terminal-red',
+        demand_shock_heat: 'text-terminal-amber',
+        demand_shock_cold: 'text-terminal-cyan',
+        carbon_price_spike: 'text-terminal-red',
+        interconnector_fault: 'text-terminal-amber',
+        renewable_subsidy: 'text-terminal-green',
+        lng_cargo_arrival: 'text-terminal-green',
+        grid_emergency: 'text-terminal-red',
+    };
+
+    /**
+     * Update the scrolling news ticker with recent event headlines.
+     * Shows the last ~10 events in reverse chronological order,
+     * styled like a Bloomberg terminal news feed.
+     */
+    function updateNewsTicker(eventLog) {
+        const el = document.getElementById('newsTickerContent');
+        if (!eventLog || eventLog.length === 0) {
+            el.innerHTML = '<span class="text-terminal-muted">No market events — all quiet</span>';
+            return;
+        }
+
+        // Build ticker string from most recent events
+        const items = eventLog.slice().reverse().map(ev => {
+            const icon = EVENT_ICONS[ev.type] || '&#9679;';
+            const statusColor = ev.status === 'BREAKING' ? 'text-terminal-red font-bold' : 'text-terminal-muted';
+            const statusTag = ev.status === 'BREAKING' ? 'BREAKING' : 'ENDED';
+            const timeStr = `D${ev.day} ${String(ev.tick).padStart(2, '0')}:00`;
+            return `<span class="${statusColor}">[${statusTag}]</span> <span class="text-white">${icon} ${ev.headline}</span> <span class="text-terminal-muted text-xs">${timeStr}</span>`;
+        });
+
+        el.innerHTML = items.join(' <span class="text-terminal-border mx-2">|</span> ');
+    }
+
+    /**
+     * Update the active events bar showing currently active market disruptions.
+     * Each active event shows a colored badge with the event type,
+     * headline summary, and remaining duration.
+     * Bar is always visible with fixed height to prevent layout shift.
+     */
+    function updateActiveEvents(activeEvents) {
+        const bar = document.getElementById('activeEventsBar');
+        const content = document.getElementById('activeEventsContent');
+
+        if (!activeEvents || activeEvents.length === 0) {
+            bar.style.opacity = '0.4';
+            content.innerHTML = '<span class="text-terminal-muted">No active events</span>';
+            return;
+        }
+
+        bar.style.opacity = '1';
+
+        const badges = activeEvents.map(ev => {
+            const icon = EVENT_ICONS[ev.type] || '&#9679;';
+            const color = EVENT_COLORS[ev.type] || 'text-terminal-amber';
+            const hoursLeft = ev.ticks_remaining;
+            const icNote = ev.ic ? ` [${ev.ic}]` : '';
+            const zoneNote = ev.zones && ev.zones.length > 0 && ev.zones.length < 5
+                ? ` [${ev.zones.join(',')}]`
+                : '';
+
+            return `<div class="flex items-center gap-1.5 shrink-0 ${color}">
+                <span class="storm-active">${icon}</span>
+                <span class="font-medium">${ev.headline.substring(0, 50)}${ev.headline.length > 50 ? '...' : ''}</span>
+                <span class="text-terminal-muted">${icNote}${zoneNote}</span>
+                <span class="bg-terminal-bg px-1.5 py-0.5 rounded text-xs">${hoursLeft}h left</span>
+            </div>`;
+        });
+
+        content.innerHTML = badges.join('');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // SECTION 7: TRADING FUNCTIONS
+    // ─────────────────────────────────────────────────────────────────────
+
+    function updateTradeAmount() {
+        const slider = document.getElementById('tradeSlider');
+        const mw = parseInt(slider.value);
+        document.getElementById('tradeAmountDisplay').textContent = `${mw.toLocaleString()} MW`;
+
+        // Update cost preview
+        const dePrice = parseFloat(document.getElementById('dePriceLarge').textContent.replace(/[^\d.-]/g, '')) || 45;
+        updateCostPreview(dePrice);
+    }
+
+    function updateCostPreview(dePrice) {
+        const mw = parseInt(document.getElementById('tradeSlider').value) || 1000;
+        const cost = Math.abs(mw * dePrice);
+        const costStr = `€${cost.toLocaleString('en', { maximumFractionDigits: 0 })}`;
+
+        // Show efficiency info: how much actually enters/leaves the battery
+        const player = appState.player || {};
+        const soh = player.battery_soh || 1.0;
+        // RT efficiency degrades with age: base × (1 - 0.10 × (1 - soh))
+        const rtEff = 0.90 * (1.0 - 0.10 * (1.0 - soh));
+        const legEff = Math.sqrt(rtEff);
+        const mwhStored = Math.round(mw * legEff);
+        const mwhDelivered = Math.round(mw * legEff);
+
+        document.getElementById('costPreview').innerHTML =
+            `Est. value: ${costStr} ` +
+            `<span class="text-terminal-muted">| Buy: ${mwhStored.toLocaleString()} MWh stored` +
+            ` | Sell: ${mwhDelivered.toLocaleString()} MWh delivered</span>`;
+    }
+
+    // ── Day-Ahead Market Functions ──
+
+    let daBidType = 'BUY';  // Current selected bid type
+
+    function setDABidType(type) {
+        daBidType = type;
+        const buyBtn = document.getElementById('daBidBuy');
+        const sellBtn = document.getElementById('daBidSell');
+
+        if (type === 'BUY') {
+            buyBtn.className = 'text-xs py-1.5 rounded border border-terminal-green/40 text-terminal-green bg-terminal-green/10 font-medium';
+            sellBtn.className = 'text-xs py-1.5 rounded border border-terminal-border text-terminal-muted';
+        } else {
+            buyBtn.className = 'text-xs py-1.5 rounded border border-terminal-border text-terminal-muted';
+            sellBtn.className = 'text-xs py-1.5 rounded border border-terminal-red/40 text-terminal-red bg-terminal-red/10 font-medium';
+        }
+    }
+
+    function submitDABid() {
+        const bidPrice = parseFloat(document.getElementById('daBidPrice').value);
+        const mw = parseInt(document.getElementById('daBidMW').value);
+
+        if (isNaN(bidPrice) || isNaN(mw) || mw <= 0) {
+            showToast('Invalid bid parameters', 'error');
+            return;
+        }
+
+        if (!appState.ws || appState.ws.readyState !== WebSocket.OPEN) {
+            showToast('Not connected to server', 'error');
+            return;
+        }
+
+        appState.ws.send(JSON.stringify({
+            type: 'da_bid',
+            action: daBidType,
+            mw: mw,
+            bid_price: bidPrice,
+        }));
+
+        const feedbackEl = document.getElementById('daFeedback');
+        feedbackEl.textContent = `Submitting ${daBidType} bid...`;
+        feedbackEl.className = 'text-xs text-center mt-1.5 h-4 text-terminal-amber';
+    }
+
+    /**
+     * Update the DA market panel with auction status and results.
+     */
+    function updateDAMarket(daMarket) {
+        if (!daMarket) return;
+
+        const statusEl = document.getElementById('daStatus');
+        const clearingHour = daMarket.clearing_hour || 12;
+
+        if (daMarket.cleared_today) {
+            statusEl.textContent = `Cleared @ €${(daMarket.clearing_price || 0).toFixed(1)}`;
+            statusEl.className = 'text-xs text-terminal-green font-bold';
+        } else {
+            const pendingCount = daMarket.num_pending_bids || 0;
+            statusEl.textContent = `Gate open — ${pendingCount} bid${pendingCount !== 1 ? 's' : ''} (clears ${String(clearingHour).padStart(2,'0')}:00)`;
+            statusEl.className = 'text-xs text-terminal-amber';
+        }
+
+        // Show last clearing results
+        const lastResults = daMarket.last_results || [];
+        const clearingPanel = document.getElementById('daLastClearing');
+        const clearingInfo = document.getElementById('daClearingInfo');
+
+        if (lastResults.length > 0 && daMarket.clearing_price) {
+            clearingPanel.classList.remove('hidden');
+            let html = `<div class="mb-1">Price: <span class="text-terminal-green font-bold">€${daMarket.clearing_price.toFixed(2)}/MWh</span></div>`;
+
+            // Filter to show current player's results
+            const myResults = lastResults.filter(r => r.player_name === appState.username);
+            if (myResults.length > 0) {
+                for (const r of myResults) {
+                    const color = r.accepted ? 'text-terminal-green' : 'text-terminal-red';
+                    const status = r.accepted ? 'ACCEPTED' : 'REJECTED';
+                    html += `<div class="${color}">${status}: ${r.action} ${r.mw}MW @ €${r.bid_price} → clearing €${r.clearing_price}</div>`;
+                }
+            }
+            clearingInfo.innerHTML = html;
+        } else if (!daMarket.cleared_today) {
+            clearingPanel.classList.add('hidden');
+        }
+    }
+
+    function executeTrade(action) {
+        const mw = parseInt(document.getElementById('tradeSlider').value);
+
+        if (!appState.ws || appState.ws.readyState !== WebSocket.OPEN) {
+            showToast('Not connected to server', 'error');
+            return;
+        }
+
+        // Send trade via WebSocket
+        appState.ws.send(JSON.stringify({
+            type: 'trade',
+            action: action,
+            mw: mw,
+        }));
+
+        // Visual feedback
+        const feedbackEl = document.getElementById('tradeFeedback');
+        feedbackEl.textContent = `${action} ${mw.toLocaleString()} MW — executing...`;
+        feedbackEl.className = 'text-xs text-center mt-2 h-4 text-terminal-amber';
+    }
+
+    function handleTradeResult(data) {
+        if (data.error) {
+            showToast(data.error, 'error');
+            return;
+        }
+
+        // Play trade sound
+        if (data.action === 'BUY') soundBuy();
+        else if (data.action === 'SELL') soundSell();
+
+        // Update player display
+        if (data.player) {
+            updatePlayerDisplay(data.player);
+        }
+
+        // Update portfolio analytics
+        if (data.analytics) {
+            updatePortfolio(data.analytics);
+        }
+
+        // Show success feedback with physics details
+        const feedbackEl = document.getElementById('tradeFeedback');
+        const action = data.action;
+        const mw = data.mw;
+        const price = data.price_eur_mwh;
+        const total = data.total_cost;
+        const bp = data.battery_physics || {};
+
+        const color = action === 'BUY' ? 'text-terminal-green' : 'text-terminal-red';
+        const totalStr = `€${Math.abs(total).toLocaleString('en', { maximumFractionDigits: 0 })}`;
+
+        // Show efficiency info in feedback
+        let effInfo = '';
+        if (action === 'BUY' && bp.mwh_stored != null) {
+            effInfo = ` (${bp.mwh_stored.toLocaleString()} MWh stored)`;
+        } else if (action === 'SELL' && bp.mwh_delivered != null) {
+            effInfo = ` (${bp.mwh_delivered.toLocaleString()} MWh delivered)`;
+        }
+
+        feedbackEl.innerHTML = `${action} ${mw.toLocaleString()} MW @ €${price}/MWh = ${totalStr}${effInfo}`;
+        feedbackEl.className = `text-xs text-center mt-2 h-4 ${color}`;
+
+        // Toast notification
+        showToast(`${action} ${mw.toLocaleString()} MW @ €${price.toFixed(2)}/MWh`, action === 'BUY' ? 'success' : 'info');
+
+        // Request fresh player state
+        if (appState.ws && appState.ws.readyState === WebSocket.OPEN) {
+            appState.ws.send(JSON.stringify({ type: 'get_player' }));
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // SECTION 8: TOAST NOTIFICATIONS
+    // ─────────────────────────────────────────────────────────────────────
+
+    function showToast(message, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+
+        const colors = {
+            success: 'border-terminal-green bg-terminal-green/10 text-terminal-green',
+            error: 'border-terminal-red bg-terminal-red/10 text-terminal-red',
+            info: 'border-terminal-blue bg-terminal-blue/10 text-terminal-blue',
+        };
+
+        toast.className = `toast border rounded px-4 py-2 text-xs font-medium ${colors[type] || colors.info}`;
+        toast.textContent = message;
+        container.appendChild(toast);
+
+        // Auto-remove after 3 seconds
+        setTimeout(() => {
+            toast.remove();
+        }, 3000);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // SECTION 8B: SOUND EFFECTS (NEW)
+    // ─────────────────────────────────────────────────────────────────────
+    // Web Audio API synthesized sounds — no external files needed.
+    // Each sound is a short tone with specific frequency and envelope.
+    // Sounds are opt-in: muted by default, toggle with 'M' key.
+
+    let audioCtx = null;
+    let soundEnabled = false;
+
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+    }
+
+    /**
+     * Play a synthesized tone with the given parameters.
+     * @param {number} freq - Frequency in Hz
+     * @param {string} type - Oscillator type: 'sine', 'square', 'triangle', 'sawtooth'
+     * @param {number} duration - Duration in seconds
+     * @param {number} volume - Volume 0.0 to 1.0
+     * @param {number} [freqEnd] - Optional end frequency for pitch sweep
+     */
+    function playTone(freq, type, duration, volume, freqEnd) {
+        if (!soundEnabled || !audioCtx) return;
+
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        if (freqEnd) {
+            osc.frequency.linearRampToValueAtTime(freqEnd, audioCtx.currentTime + duration);
+        }
+
+        gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.start(audioCtx.currentTime);
+        osc.stop(audioCtx.currentTime + duration);
+    }
+
+    // ── Sound presets ──
+
+    function soundBuy() {
+        // Rising tone — positive, like "charging up"
+        playTone(440, 'sine', 0.15, 0.12);
+        setTimeout(() => playTone(554, 'sine', 0.12, 0.1), 100);
+    }
+
+    function soundSell() {
+        // Falling tone — "discharging"
+        playTone(554, 'sine', 0.15, 0.12);
+        setTimeout(() => playTone(440, 'sine', 0.12, 0.1), 100);
+    }
+
+    function soundStorm() {
+        // Low rumble with sweep — ominous
+        playTone(80, 'sawtooth', 0.5, 0.08, 120);
+        setTimeout(() => playTone(100, 'triangle', 0.3, 0.06), 200);
+    }
+
+    function soundPriceSpike() {
+        // Sharp high beep — attention-grabbing
+        playTone(880, 'square', 0.08, 0.08);
+        setTimeout(() => playTone(880, 'square', 0.08, 0.08), 120);
+        setTimeout(() => playTone(880, 'square', 0.08, 0.08), 240);
+    }
+
+    function soundDAClearing() {
+        // Bell-like chime — auction
+        playTone(660, 'sine', 0.3, 0.1);
+        setTimeout(() => playTone(880, 'sine', 0.3, 0.08), 150);
+        setTimeout(() => playTone(1100, 'sine', 0.4, 0.06), 300);
+    }
+
+    function soundEvent() {
+        // Short alert beep
+        playTone(600, 'triangle', 0.12, 0.08);
+        setTimeout(() => playTone(750, 'triangle', 0.15, 0.06), 80);
+    }
+
+    function toggleSound() {
+        initAudio();
+        soundEnabled = !soundEnabled;
+        showToast(soundEnabled ? 'Sound ON' : 'Sound OFF', 'info');
+    }
+
+    // Track previous state for change detection
+    let prevStormZones = new Set();
+    let prevDaCleared = false;
+    let prevActiveEventCount = 0;
+
+    /**
+     * Detect state changes that should trigger sounds.
+     * Called during each tick's state update.
+     */
+    function checkSoundTriggers(data) {
+        if (!soundEnabled) return;
+
+        // Storm detection — play sound when a new storm starts
+        if (data.weather) {
+            const currentStorms = new Set();
+            for (const [zone, w] of Object.entries(data.weather)) {
+                if (w.storm_active) currentStorms.add(zone);
+            }
+            for (const zone of currentStorms) {
+                if (!prevStormZones.has(zone)) {
+                    soundStorm();
+                    break; // One sound per tick
+                }
+            }
+            prevStormZones = currentStorms;
+        }
+
+        // DA clearing detection
+        if (data.da_market && data.da_market.cleared_today && !prevDaCleared) {
+            soundDAClearing();
+        }
+        if (data.da_market) prevDaCleared = data.da_market.cleared_today;
+
+        // New event detection
+        if (data.active_events && data.active_events.length > prevActiveEventCount) {
+            soundEvent();
+        }
+        if (data.active_events) prevActiveEventCount = data.active_events.length;
+
+        // Price spike detection (DE price > €80 or < -€10)
+        if (data.prices) {
+            const de = data.prices.DE || 0;
+            if (de > 80 || de < -10) {
+                soundPriceSpike();
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // SECTION 9: KEYBOARD SHORTCUTS
+    // ─────────────────────────────────────────────────────────────────────
+
+    document.addEventListener('keydown', (e) => {
+        // Only handle shortcuts when game UI is visible
+        if (document.getElementById('gameUI').classList.contains('hidden')) return;
+
+        if (e.key === 'b' || e.key === 'B') {
+            e.preventDefault();
+            executeTrade('BUY');
+        } else if (e.key === 's' || e.key === 'S') {
+            // Don't trigger on Ctrl+S (save)
+            if (!e.ctrlKey && !e.metaKey) {
+                e.preventDefault();
+                executeTrade('SELL');
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const slider = document.getElementById('tradeSlider');
+            slider.value = Math.min(10000, parseInt(slider.value) + 500);
+            updateTradeAmount();
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const slider = document.getElementById('tradeSlider');
+            slider.value = Math.max(100, parseInt(slider.value) - 500);
+            updateTradeAmount();
+        } else if (e.key === 'm' || e.key === 'M') {
+            // Toggle sound effects
+            if (!e.ctrlKey && !e.metaKey) {
+                e.preventDefault();
+                toggleSound();
+            }
+        }
+    });
+
+    // ─────────────────────────────────────────────────────────────────────
+    // SECTION 9B: TUTORIAL SYSTEM (NEW)
+    // ─────────────────────────────────────────────────────────────────────
+
+    const TUTORIAL_STEPS = [
+        {
+            title: "Welcome to Battery Trader Sim!",
+            text: "You manage a 50 GWh grid battery in Germany. Buy electricity when it's cheap, sell when it's expensive. Beat other traders on the leaderboard! Let's walk through the interface.",
+            position: "center",
+        },
+        {
+            title: "The Market Map",
+            text: "This map shows 5 European electricity zones. Colors show prices: GREEN = cheap (buy opportunity), RED = expensive (sell opportunity). Dashed lines are interconnectors — when they turn red with 'MAX!', congestion is trapping cheap power.",
+            target: "#map",
+            position: "right",
+        },
+        {
+            title: "Price History Chart",
+            text: "The chart shows the last 72 hours of prices for all 5 zones. The blue line is Germany (your trading zone). The dashed amber line shows your average buy price — sell when the price is above it!",
+            target: "#priceChart",
+            position: "right",
+        },
+        {
+            title: "German Spot Price & Weather",
+            text: "This panel shows the CURRENT German electricity price — what you pay or receive when trading. Weather data drives the price: high wind = low price (lots of cheap wind power), low wind = high price.",
+            target: "#dePriceLarge",
+            position: "left",
+        },
+        {
+            title: "Weather Forecast",
+            text: "The 6-hour forecast shows predicted wind speeds. Compare ACTUAL vs FORECAST: if actual wind is HIGHER than forecast, prices will drop further (surprise surplus). These mismatches are your trading edge!",
+            target: "#forecastDeviation",
+            position: "left",
+        },
+        {
+            title: "Intraday Trading",
+            text: "Use the slider to set your trade size (100-10,000 MW). Click BUY to charge the battery (costs cash) or SELL to discharge (earns cash). Keyboard shortcuts: B=Buy, S=Sell, Arrows=adjust size.",
+            target: "#tradeSlider",
+            position: "left",
+        },
+        {
+            title: "Day-Ahead Auction",
+            text: "The DA market lets you submit limit orders that clear at 12:00. Set your price and volume — if your bid price beats the clearing price, you trade at the uniform clearing price. Less risky than intraday, but less reactive.",
+            target: "#daStatus",
+            position: "left",
+        },
+        {
+            title: "News Ticker & Events",
+            text: "Watch the news ticker for market-moving events: plant outages, storms, carbon price spikes, and interconnector faults. These create sudden price moves — react fast to profit! The leaderboard ranks all traders by Mark-to-Market PnL. Good luck!",
+            target: "#newsTicker",
+            position: "below",
+        },
+    ];
+
+    let tutorialStep = 0;
+
+    function startTutorial() {
+        tutorialStep = 0;
+        document.getElementById('tutorialOverlay').classList.remove('hidden');
+        showTutorialStep();
+        // Mark as seen
+        sessionStorage.setItem('bts_tutorial_seen', 'true');
+    }
+
+    function tutorialSkip() {
+        document.getElementById('tutorialOverlay').classList.add('hidden');
+        sessionStorage.setItem('bts_tutorial_seen', 'true');
+    }
+
+    function tutorialNext() {
+        tutorialStep++;
+        if (tutorialStep >= TUTORIAL_STEPS.length) {
+            tutorialSkip();
+            return;
+        }
+        showTutorialStep();
+    }
+
+    function tutorialPrev() {
+        if (tutorialStep > 0) {
+            tutorialStep--;
+            showTutorialStep();
+        }
+    }
+
+    function showTutorialStep() {
+        const step = TUTORIAL_STEPS[tutorialStep];
+        const card = document.getElementById('tutorialCard');
+        const title = document.getElementById('tutorialTitle');
+        const text = document.getElementById('tutorialText');
+        const counter = document.getElementById('tutorialStepCounter');
+        const prevBtn = document.getElementById('tutorialPrevBtn');
+        const nextBtn = document.getElementById('tutorialNextBtn');
+
+        title.textContent = step.title;
+        text.textContent = step.text;
+        counter.textContent = `${tutorialStep + 1}/${TUTORIAL_STEPS.length}`;
+        prevBtn.style.visibility = tutorialStep === 0 ? 'hidden' : 'visible';
+        nextBtn.textContent = tutorialStep === TUTORIAL_STEPS.length - 1 ? "Let's trade!" : 'Next \u2192';
+
+        // Position the card
+        if (step.position === 'center' || !step.target) {
+            card.style.top = '50%';
+            card.style.left = '50%';
+            card.style.transform = 'translate(-50%, -50%)';
+        } else {
+            const targetEl = document.querySelector(step.target);
+            if (targetEl) {
+                const rect = targetEl.getBoundingClientRect();
+                card.style.transform = 'none';
+
+                if (step.position === 'right') {
+                    card.style.top = `${Math.max(60, rect.top)}px`;
+                    card.style.left = `${rect.right + 16}px`;
+                } else if (step.position === 'left') {
+                    card.style.top = `${Math.max(60, rect.top)}px`;
+                    card.style.left = `${Math.max(16, rect.left - 396)}px`;
+                } else if (step.position === 'below') {
+                    card.style.top = `${rect.bottom + 16}px`;
+                    card.style.left = `${rect.left}px`;
+                }
+            } else {
+                // Fallback to center
+                card.style.top = '50%';
+                card.style.left = '50%';
+                card.style.transform = 'translate(-50%, -50%)';
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // SECTION 10: INITIALIZATION
+    // ─────────────────────────────────────────────────────────────────────
+
+    // On page load: check for saved session or show login
+    window.addEventListener('DOMContentLoaded', () => {
+        if (!checkSavedSession()) {
+            // Focus username input
+            document.getElementById('loginUsername').focus();
+        }
+    });
+    </script>
+</body>
+</html>
