@@ -3254,6 +3254,7 @@ async def admin_reset(request: Request):
     await db.execute("DELETE FROM trades")
     await db.execute("DELETE FROM price_history")
     await db.execute("DELETE FROM players")
+    await db.execute("DELETE FROM game_sessions")
     await db.commit()
 
     # Reset in-memory state
