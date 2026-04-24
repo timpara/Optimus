@@ -18,6 +18,10 @@ __pycache__/
 Dockerfile
 docker-compose.yml
 
-# Docs
+# Docs — the Dockerfile COPYs README.md and LICENSE into the builder
+# stage because pyproject.toml references them via `readme` and
+# `license = { file = "LICENSE" }`.  Excluding them here silently breaks
+# `docker build` with "file not found".
 *.md
-LICENSE
+!README.md
+# (LICENSE intentionally not listed — it must ship with the image.)
