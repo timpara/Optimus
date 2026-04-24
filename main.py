@@ -717,25 +717,41 @@ MAX_EVENT_LOG = 40  # Keep last 40 events in the ticker
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Day-Ahead bid validation bounds.
-# Historical EPEX DA clearing prices sit in roughly [-500, +4000] €/MWh; we
-# widen the upper bound to 10_000 to accommodate the game's price-mod events
-# but still reject obviously broken inputs (NaN/inf, 10^9, etc.).
+# Historical EPEX DA clearing prices have rarely exceeded ~4000 €/MWh; the
+# game's largest event-driven price_mod is +25 (optimus/constants.py), so
+# clearing prices stay well below 1000 EUR/MWh in practice.  We cap at 5000
+# to leave generous headroom while still rejecting obviously broken inputs
+# (NaN/inf, 10^9, etc.).
 # ─────────────────────────────────────────────────────────────────────────────
 
 DA_BID_PRICE_MIN = -500.0  # EUR/MWh — lower than any real EPEX floor
-DA_BID_PRICE_MAX = 10_000.0  # EUR/MWh — well above any realistic cap
+DA_BID_PRICE_MAX = 5_000.0  # EUR/MWh — well above any realistic cap
+
+
+def _safe_token_id(token: str | None, length: int = 8) -> str:
+    """Return a short, log-safe prefix of a token.
+
+    Guarantees a string result even when ``token`` is ``None`` or empty, so
+    that logging inside an exception handler never raises a secondary
+    ``TypeError`` that would shadow the original error.
+    """
+    if not token:
+        return "<unknown>"
+    return token[:length]
 
 
 def validate_da_bid(
     action: Any,
     mw: Any,
     bid_price: Any,
-) -> tuple[str, float, float] | str:
+) -> tuple[bool, tuple[str, float, float] | str]:
     """Validate a day-ahead bid payload from the websocket.
 
-    Returns either a normalized ``(action, mw, bid_price)`` tuple on success,
-    or a human-readable error string on failure.  Pure function — no state
-    access — so it is trivial to unit-test.
+    Returns ``(True, (action, mw, bid_price))`` on success or
+    ``(False, error_message)`` on failure.  The boolean-first shape lets
+    callers destructure without relying on ``isinstance`` checks.
+
+    The function is pure (no state access), which keeps unit tests trivial.
 
     Normalisation:
     * ``action`` uppercased; must be "BUY" or "SELL".
@@ -744,24 +760,24 @@ def validate_da_bid(
       ``[DA_BID_PRICE_MIN, DA_BID_PRICE_MAX]``.
     """
     if not isinstance(action, str):
-        return "DA bid action must be a string"
+        return False, "DA bid action must be a string"
     action_u = action.upper()
     if action_u not in ("BUY", "SELL"):
-        return "DA bid action must be BUY or SELL"
+        return False, "DA bid action must be BUY or SELL"
 
     if not isinstance(mw, (int, float)) or isinstance(mw, bool):
-        return "DA bid MW must be a number"
+        return False, "DA bid MW must be a number"
     mw_f = float(mw)
     if not math.isfinite(mw_f) or mw_f <= 0:
-        return "DA bid MW must be a positive finite number"
+        return False, "DA bid MW must be a positive finite number"
 
     if not isinstance(bid_price, (int, float)) or isinstance(bid_price, bool):
-        return "DA bid price must be a number"
+        return False, "DA bid price must be a number"
     bid_f = float(bid_price)
     if not math.isfinite(bid_f):
-        return "DA bid price must be finite (not NaN or inf)"
+        return False, "DA bid price must be finite (not NaN or inf)"
     if bid_f < DA_BID_PRICE_MIN or bid_f > DA_BID_PRICE_MAX:
-        return (
+        return False, (
             f"DA bid price must be between {DA_BID_PRICE_MIN:g} and "
             f"{DA_BID_PRICE_MAX:g} EUR/MWh"
         )
@@ -769,7 +785,7 @@ def validate_da_bid(
     # Cap MW at the battery limit — matches the behaviour of the real-time
     # trading path at line ~2310 and ~2628.
     mw_clamped = min(mw_f, float(BATTERY_MAX_MW))
-    return (action_u, mw_clamped, bid_f)
+    return True, (action_u, mw_clamped, bid_f)
 
 
 def process_events(state: GameState) -> None:
@@ -2860,11 +2876,11 @@ async def websocket_endpoint(ws: WebSocket):
                         )
                         continue
 
-                    validated = validate_da_bid(action, mw, bid_price)
-                    if isinstance(validated, str):
+                    ok, validated = validate_da_bid(action, mw, bid_price)
+                    if not ok:
                         await ws.send_text(json.dumps({"error": validated}))
                         continue
-                    action, mw, bid_price = validated
+                    action, mw, bid_price = validated  # type: ignore[assignment]
 
                     if game_state.da_cleared_today:
                         await ws.send_text(
@@ -2919,8 +2935,10 @@ async def websocket_endpoint(ws: WebSocket):
     except Exception as e:
         # Unexpected websocket failures were previously swallowed silently,
         # which made diagnosing protocol / serialisation bugs impossible.
-        # Still clean up client state, but log the traceback.
-        print(f"[WEBSOCKET ERROR] token={token[:8]}... {e}")
+        # Still clean up client state, but log the traceback.  Use
+        # _safe_token_id so a None / short token never raises inside the
+        # handler and shadows the real exception.
+        print(f"[WEBSOCKET ERROR] token={_safe_token_id(token)}... {e}")
         traceback.print_exc()
         ws_clients.pop(token, None)
         _trade_timestamps.pop(token, None)
