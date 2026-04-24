@@ -102,6 +102,21 @@
             font-size: 16px !important;
         }
 
+        /*
+         * Defensive cap on Leaflet's internal stacking context. Leaflet uses
+         * z-index values up to 1000 for its controls (and 700 for popup pane),
+         * which previously rendered above the tutorial overlay. We keep panes
+         * visible inside the map container but ensure nothing from Leaflet
+         * can escape above the tutorial (which uses z-[9999]).
+         */
+        .leaflet-pane,
+        .leaflet-top,
+        .leaflet-bottom { z-index: 400 !important; }
+        .leaflet-popup-pane { z-index: 700 !important; }
+        /* Tutorial overlay must always sit above the map, toasts, and popups. */
+        #tutorialOverlay { z-index: 9999 !important; }
+        #tutorialCard, #tutorialFullList { z-index: 10000 !important; }
+
         /* Country label on map */
         .zone-label {
             background: rgba(10, 14, 23, 0.95);
@@ -290,6 +305,9 @@
                 <div class="text-4xl mb-2">&#9889;</div>
                 <h1 class="text-2xl font-bold text-terminal-green">BATTERY TRADER SIM</h1>
                 <p class="text-terminal-muted text-sm mt-2">50 GWh Grid Battery &bull; European Energy Markets</p>
+                <p id="loginBetaNotice" class="text-terminal-amber text-xs mt-3 font-bold tracking-wide">
+                    &#9888; BETA &mdash; FOR EDUCATIONAL PURPOSES ONLY. NOT FINANCIAL ADVICE.
+                </p>
             </div>
 
             <!-- Login Form -->
@@ -322,6 +340,15 @@
                 <p class="text-terminal-muted text-sm text-center mt-4">
                     Enter your trader name and class password to join or resume.
                 </p>
+                <p class="text-terminal-muted text-xs text-center mt-2">
+                    Open source &bull;
+                    <a id="loginGithubLink"
+                        href="https://github.com/timpara/Optimus"
+                        target="_blank" rel="noopener noreferrer"
+                        class="text-terminal-green hover:underline">
+                        github.com/timpara/Optimus
+                    </a>
+                </p>
             </div>
         </div>
     </div>
@@ -337,6 +364,13 @@
                 <span class="text-xl">&#9889;</span>
                 <h1 class="text-terminal-green font-bold text-sm md:text-base tracking-widest">BATTERY TRADER</h1>
                 <span class="text-terminal-muted text-sm hidden md:inline">v2.0</span>
+                <span id="headerBetaBadge"
+                    class="bg-terminal-amber/15 border border-terminal-amber/40 text-terminal-amber
+                           text-[10px] md:text-xs font-bold tracking-wider rounded px-1.5 py-0.5
+                           uppercase"
+                    title="Educational beta &mdash; not financial advice">
+                    BETA &bull; EDU
+                </span>
             </div>
             <div class="flex items-center gap-2 md:gap-4 text-sm">
                 <!-- Game Clock -->
@@ -371,6 +405,14 @@
                 <div id="wsStatus" class="w-2 h-2 rounded-full bg-terminal-red" title="Disconnected"></div>
                 <!-- Tutorial trigger -->
                 <button onclick="startTutorial()" class="text-terminal-muted text-sm hover:text-terminal-green transition-colors" title="Show tutorial">?</button>
+                <!-- GitHub repo link -->
+                <a id="headerGithubLink"
+                    href="https://github.com/timpara/Optimus"
+                    target="_blank" rel="noopener noreferrer"
+                    class="text-terminal-muted text-sm hover:text-terminal-green transition-colors hidden sm:inline"
+                    title="View source on GitHub">
+                    GitHub
+                </a>
                 <!-- Sound toggle -->
                 <button onclick="toggleSound()" id="soundToggle" class="text-terminal-muted text-sm hover:text-terminal-green transition-colors" title="Toggle sound (M)">&#9834;</button>
             </div>
@@ -740,16 +782,25 @@
     <!-- ════════════════════════════════════════════════════════════════════ -->
     <!-- TUTORIAL OVERLAY                                                    -->
     <!-- Step-by-step onboarding that teaches players the UI and mechanics   -->
+    <!-- IMPORTANT: uses z-[9999] / z-[10000] so it always stays ABOVE the   -->
+    <!-- Leaflet map (internal max z-index ~1000) and the toast container.   -->
     <!-- ════════════════════════════════════════════════════════════════════ -->
-    <div id="tutorialOverlay" class="fixed inset-0 z-40 hidden">
+    <div id="tutorialOverlay" class="fixed inset-0 z-[9999] hidden">
         <!-- Semi-transparent backdrop (click to dismiss) -->
         <div class="absolute inset-0 bg-black/60" onclick="tutorialSkip()"></div>
-        <!-- Tutorial card (positioned dynamically, z-10 to stack above backdrop) -->
-        <div id="tutorialCard" class="absolute z-10 bg-terminal-panel border border-terminal-green/50 rounded-lg p-5 shadow-2xl"
+        <!-- Tutorial card (positioned dynamically; z-[10000] keeps it above the backdrop AND the map) -->
+        <div id="tutorialCard" class="absolute z-[10000] bg-terminal-panel border border-terminal-green/50 rounded-lg p-5 shadow-2xl"
              style="max-width: 380px;">
             <div class="flex items-center justify-between mb-3">
                 <span class="text-terminal-green text-sm font-bold">TUTORIAL</span>
-                <span id="tutorialStepCounter" class="text-terminal-muted text-sm">1/8</span>
+                <div class="flex items-center gap-3">
+                    <button id="tutorialShowAllBtn" onclick="tutorialShowAll()"
+                        class="text-terminal-muted text-xs hover:text-terminal-green transition-colors"
+                        title="Read the whole tutorial on one page">
+                        View all steps
+                    </button>
+                    <span id="tutorialStepCounter" class="text-terminal-muted text-sm">1/8</span>
+                </div>
             </div>
             <h3 id="tutorialTitle" class="text-white font-bold text-base mb-2"></h3>
             <p id="tutorialText" class="text-terminal-muted text-sm leading-relaxed mb-4"></p>
@@ -771,6 +822,47 @@
                         Next &rarr;
                     </button>
                 </div>
+            </div>
+        </div>
+
+        <!--
+            Full-tutorial "read all" view: rendered client-side from TUTORIAL_STEPS
+            when the user clicks "View all steps". Hidden by default.
+        -->
+        <div id="tutorialFullList"
+             class="absolute z-[10000] bg-terminal-panel border border-terminal-green/50 rounded-lg shadow-2xl hidden
+                    left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
+                    w-[92vw] max-w-2xl"
+             style="max-height: 82vh; display: none;">
+            <div class="flex items-center justify-between px-5 py-3 border-b border-terminal-border">
+                <div class="flex items-center gap-3">
+                    <span class="text-terminal-green text-sm font-bold">TUTORIAL &mdash; FULL GUIDE</span>
+                    <span class="text-terminal-muted text-xs">Read all steps on one page</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button onclick="tutorialShowStepped()"
+                        class="text-terminal-muted text-xs hover:text-terminal-green transition-colors">
+                        &larr; Step-by-step
+                    </button>
+                    <button onclick="tutorialSkip()"
+                        class="text-terminal-muted text-sm hover:text-white transition-colors"
+                        title="Close tutorial">
+                        &times;
+                    </button>
+                </div>
+            </div>
+            <div id="tutorialFullContent" class="px-5 py-4 space-y-5 overflow-y-auto"
+                 style="max-height: calc(82vh - 104px);">
+                <!-- Populated by renderTutorialFullList() -->
+            </div>
+            <div class="px-5 py-3 border-t border-terminal-border flex items-center justify-between gap-3">
+                <p class="text-terminal-muted text-xs">
+                    &#9888; Educational beta &mdash; not financial advice.
+                </p>
+                <a href="https://github.com/timpara/Optimus" target="_blank" rel="noopener noreferrer"
+                    class="text-terminal-green text-xs hover:underline">
+                    Source on GitHub &rarr;
+                </a>
             </div>
         </div>
     </div>
@@ -2641,7 +2733,7 @@
     const TUTORIAL_STEPS = [
         {
             title: "Welcome to Battery Trader Sim!",
-            text: "You manage a 50 GWh grid battery in Germany. Buy electricity when it's cheap, sell when it's expensive. Beat other traders on the leaderboard! Let's walk through the interface.",
+            text: "\u26A0 Educational beta \u2014 not financial advice. You manage a 50 GWh grid battery in Germany. Buy electricity when it's cheap, sell when it's expensive. Beat other traders on the leaderboard! Let's walk through the interface.",
             position: "center",
         },
         {
@@ -2693,6 +2785,8 @@
     function startTutorial() {
         tutorialStep = 0;
         document.getElementById('tutorialOverlay').classList.remove('hidden');
+        // Always start in stepped mode, even if the user previously viewed all.
+        tutorialShowStepped();
         showTutorialStep();
         // Mark as seen
         sessionStorage.setItem('bts_tutorial_seen', 'true');
@@ -2700,6 +2794,8 @@
 
     function tutorialSkip() {
         document.getElementById('tutorialOverlay').classList.add('hidden');
+        // Reset to stepped view so next open is predictable.
+        tutorialShowStepped();
         sessionStorage.setItem('bts_tutorial_seen', 'true');
     }
 
@@ -2717,6 +2813,59 @@
             tutorialStep--;
             showTutorialStep();
         }
+    }
+
+    /**
+     * Switch the tutorial overlay from step-by-step mode to the
+     * "read the whole tutorial" mode: a single scrollable panel that
+     * lists all TUTORIAL_STEPS in order. This lets players reference
+     * the full guide without clicking Next 8 times.
+     */
+    function tutorialShowAll() {
+        renderTutorialFullList();
+        const card = document.getElementById('tutorialCard');
+        const list = document.getElementById('tutorialFullList');
+        if (card) card.style.display = 'none';
+        if (list) {
+            list.classList.remove('hidden');
+            list.style.display = 'block';
+        }
+    }
+
+    /**
+     * Return to the classic stepped tutorial view (default).
+     */
+    function tutorialShowStepped() {
+        const card = document.getElementById('tutorialCard');
+        const list = document.getElementById('tutorialFullList');
+        if (list) {
+            list.classList.add('hidden');
+            list.style.display = 'none';
+        }
+        if (card) card.style.display = '';
+    }
+
+    /**
+     * Render every TUTORIAL_STEPS entry into #tutorialFullContent.
+     * Called lazily whenever the user opens the full view.
+     */
+    function renderTutorialFullList() {
+        const container = document.getElementById('tutorialFullContent');
+        if (!container) return;
+        container.innerHTML = '';
+        TUTORIAL_STEPS.forEach((step, idx) => {
+            const section = document.createElement('section');
+            section.className = 'border-l-2 border-terminal-green/40 pl-4';
+            const heading = document.createElement('h4');
+            heading.className = 'text-white font-bold text-base mb-1';
+            heading.textContent = `${idx + 1}. ${step.title}`;
+            const body = document.createElement('p');
+            body.className = 'text-terminal-muted text-sm leading-relaxed';
+            body.textContent = step.text;
+            section.appendChild(heading);
+            section.appendChild(body);
+            container.appendChild(section);
+        });
     }
 
     function showTutorialStep() {
