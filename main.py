@@ -21,6 +21,7 @@ import math
 import os
 import random
 import time
+import traceback
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -713,6 +714,62 @@ def record_price_history(state: GameState) -> None:
 
 MAX_ACTIVE_EVENTS = 3  # Prevent too many simultaneous events
 MAX_EVENT_LOG = 40  # Keep last 40 events in the ticker
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Day-Ahead bid validation bounds.
+# Historical EPEX DA clearing prices sit in roughly [-500, +4000] €/MWh; we
+# widen the upper bound to 10_000 to accommodate the game's price-mod events
+# but still reject obviously broken inputs (NaN/inf, 10^9, etc.).
+# ─────────────────────────────────────────────────────────────────────────────
+
+DA_BID_PRICE_MIN = -500.0  # EUR/MWh — lower than any real EPEX floor
+DA_BID_PRICE_MAX = 10_000.0  # EUR/MWh — well above any realistic cap
+
+
+def validate_da_bid(
+    action: Any,
+    mw: Any,
+    bid_price: Any,
+) -> tuple[str, float, float] | str:
+    """Validate a day-ahead bid payload from the websocket.
+
+    Returns either a normalized ``(action, mw, bid_price)`` tuple on success,
+    or a human-readable error string on failure.  Pure function — no state
+    access — so it is trivial to unit-test.
+
+    Normalisation:
+    * ``action`` uppercased; must be "BUY" or "SELL".
+    * ``mw`` clamped to ``[0, BATTERY_MAX_MW]``; must be a finite positive.
+    * ``bid_price`` must be finite and within
+      ``[DA_BID_PRICE_MIN, DA_BID_PRICE_MAX]``.
+    """
+    if not isinstance(action, str):
+        return "DA bid action must be a string"
+    action_u = action.upper()
+    if action_u not in ("BUY", "SELL"):
+        return "DA bid action must be BUY or SELL"
+
+    if not isinstance(mw, (int, float)) or isinstance(mw, bool):
+        return "DA bid MW must be a number"
+    mw_f = float(mw)
+    if not math.isfinite(mw_f) or mw_f <= 0:
+        return "DA bid MW must be a positive finite number"
+
+    if not isinstance(bid_price, (int, float)) or isinstance(bid_price, bool):
+        return "DA bid price must be a number"
+    bid_f = float(bid_price)
+    if not math.isfinite(bid_f):
+        return "DA bid price must be finite (not NaN or inf)"
+    if bid_f < DA_BID_PRICE_MIN or bid_f > DA_BID_PRICE_MAX:
+        return (
+            f"DA bid price must be between {DA_BID_PRICE_MIN:g} and "
+            f"{DA_BID_PRICE_MAX:g} EUR/MWh"
+        )
+
+    # Cap MW at the battery limit — matches the behaviour of the real-time
+    # trading path at line ~2310 and ~2628.
+    mw_clamped = min(mw_f, float(BATTERY_MAX_MW))
+    return (action_u, mw_clamped, bid_f)
 
 
 def process_events(state: GameState) -> None:
@@ -1606,8 +1663,11 @@ async def game_loop():
                         print(f"[AUTOSAVE ERROR] {save_err}")
 
         except Exception as e:
-            # Don't let errors crash the game loop
+            # Don't let errors crash the game loop, but do surface the full
+            # traceback so production incidents are debuggable — a lone
+            # `print(e)` drops the stack frame that caused the failure.
             print(f"[GAME LOOP ERROR] {e}")
+            traceback.print_exc()
 
         await asyncio.sleep(TICK_INTERVAL_SECONDS * game_state.game_speed)
 
@@ -2785,7 +2845,7 @@ async def websocket_endpoint(ws: WebSocket):
                     # ── Day-Ahead bid submission (new!) ──
                     # Client sends: {"type": "da_bid", "action": "BUY"|"SELL",
                     #                "mw": 1000, "bid_price": 42.0}
-                    action = cmd.get("action", "").upper()
+                    action = cmd.get("action", "")
                     mw = cmd.get("mw", 0)
                     bid_price = cmd.get("bid_price", 0)
 
@@ -2800,21 +2860,12 @@ async def websocket_endpoint(ws: WebSocket):
                         )
                         continue
 
-                    if action not in ("BUY", "SELL"):
-                        await ws.send_text(
-                            json.dumps({"error": "DA bid action must be BUY or SELL"})
-                        )
+                    validated = validate_da_bid(action, mw, bid_price)
+                    if isinstance(validated, str):
+                        await ws.send_text(json.dumps({"error": validated}))
                         continue
-                    if not isinstance(mw, (int, float)) or mw <= 0:
-                        await ws.send_text(
-                            json.dumps({"error": "DA bid MW must be positive"})
-                        )
-                        continue
-                    if not isinstance(bid_price, (int, float)):
-                        await ws.send_text(
-                            json.dumps({"error": "DA bid price must be a number"})
-                        )
-                        continue
+                    action, mw, bid_price = validated
+
                     if game_state.da_cleared_today:
                         await ws.send_text(
                             json.dumps(
@@ -2824,8 +2875,6 @@ async def websocket_endpoint(ws: WebSocket):
                             )
                         )
                         continue
-
-                    mw = min(mw, BATTERY_MAX_MW)
 
                     # Re-fetch player to get their name
                     player = await get_player_by_token(token)
@@ -2867,7 +2916,12 @@ async def websocket_endpoint(ws: WebSocket):
     except WebSocketDisconnect:
         ws_clients.pop(token, None)
         _trade_timestamps.pop(token, None)
-    except Exception:
+    except Exception as e:
+        # Unexpected websocket failures were previously swallowed silently,
+        # which made diagnosing protocol / serialisation bugs impossible.
+        # Still clean up client state, but log the traceback.
+        print(f"[WEBSOCKET ERROR] token={token[:8]}... {e}")
+        traceback.print_exc()
         ws_clients.pop(token, None)
         _trade_timestamps.pop(token, None)
 
@@ -2983,6 +3037,16 @@ async def admin_trigger_event(request: Request):
     event_type = body.get("event_type", "")
     zone = body.get("zone", "")
     ic = body.get("ic", "")
+
+    # Respect the same cap the natural event spawner enforces — otherwise an
+    # admin can push the active-events list arbitrarily high, which breaks
+    # the UI ticker and the `num_active_events` accounting elsewhere.
+    if len(game_state.active_events) >= MAX_ACTIVE_EVENTS:
+        raise HTTPException(
+            409,
+            f"Max {MAX_ACTIVE_EVENTS} active events already in flight — "
+            "wait for one to expire before triggering another.",
+        )
 
     # Find the matching template
     template = None

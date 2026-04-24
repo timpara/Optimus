@@ -20,6 +20,11 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 COPY pyproject.toml README.md LICENSE ./
 COPY main.py ./
+# The `optimus` package is declared in pyproject.toml (packages = ["optimus"]),
+# so `pip install .` needs the source tree present — otherwise the build
+# succeeds but the resulting venv is missing the `optimus.config` /
+# `optimus.constants` modules that main.py imports at startup.
+COPY optimus ./optimus/
 # Build + install — this resolves FastAPI, uvicorn, aiosqlite.
 RUN pip install --upgrade pip && pip install .
 

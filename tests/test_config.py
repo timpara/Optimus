@@ -9,9 +9,17 @@ import pytest
 
 
 def _reload_main() -> None:
-    """Force a fresh import of main.py so env vars are re-evaluated."""
-    if "main" in sys.modules:
-        del sys.modules["main"]
+    """Force a fresh import of main.py so env vars are re-evaluated.
+
+    We must also purge ``optimus.config`` (and any child modules) from
+    ``sys.modules`` because ``main`` imports it at module load time and the
+    fail-fast secret validation lives in ``optimus.config``.  Without this
+    eviction, once any earlier test has imported ``main``, re-importing it
+    here just re-uses the cached ``optimus.config`` module and silently
+    skips the validation we're trying to assert on.
+    """
+    for mod in ("main", "optimus.config", "optimus"):
+        sys.modules.pop(mod, None)
     import main  # noqa: F401
 
 
@@ -57,6 +65,7 @@ def _restore_main_after_each_test(monkeypatch: pytest.MonkeyPatch):
     # Restore the fixture-provided env and reload cleanly for downstream tests.
     monkeypatch.setenv("OPTIMUS_CLASS_PASSWORD", "test-class-pw")
     monkeypatch.setenv("OPTIMUS_ADMIN_KEY", "test-admin-key")
-    if "main" in sys.modules:
-        del sys.modules["main"]
+    # Purge both `main` and `optimus.config` — see _reload_main for rationale.
+    for mod in ("main", "optimus.config", "optimus"):
+        sys.modules.pop(mod, None)
     importlib.invalidate_caches()
