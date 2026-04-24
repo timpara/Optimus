@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/timpara/Optimus/compare/v0.2.0...v0.2.1) (2026-04-24)
+
+
+### Bug Fixes
+
+* **ui:** keep tutorial above Leaflet map and add full-guide view ([#19](https://github.com/timpara/Optimus/issues/19)) ([74d91d0](https://github.com/timpara/Optimus/commit/74d91d05747c3581697ba347cedf5a2066b36cc9))
+
 ## [0.2.0](https://github.com/timpara/Optimus/compare/v0.1.1...v0.2.0) (2026-04-24)
 
 
