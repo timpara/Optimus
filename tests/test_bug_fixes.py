@@ -44,11 +44,14 @@ def test_dockerfile_copies_optimus_package() -> None:
 
 
 def _dockerignore_excludes(rules: list[tuple[str, bool]], name: str) -> bool:
-    """Approximate Docker's .dockerignore semantics with fnmatch.
+    """Approximate Docker's .dockerignore semantics with ``fnmatch``.
 
     Docker matches both the full path and each parent prefix against each
-    pattern (with trailing `/` treated as a directory-only match).  We
-    emulate that well enough for the paths we care about here.
+    pattern (with trailing ``/`` treated as a directory-only match).  We
+    emulate that well enough for the paths checked in these tests, but this
+    helper does **not** implement Docker's ``**/`` recursive glob or the
+    difference between rooted (``/foo``) and floating (``foo``) patterns.
+    Don't reuse it outside this module without first extending it.
     """
     excluded = False
     parts = name.split("/")
@@ -114,16 +117,41 @@ def test_dockerignore_still_excludes_noisy_paths() -> None:
 # ────────────────────────────────────────────────────────────────────────────
 
 
-def test_admin_trigger_event_enforces_active_events_cap() -> None:
-    """Calling the admin handler while at the cap must raise HTTP 409.
+class _FakeRequest:
+    """Minimal stand-in for ``fastapi.Request`` — only ``.json()`` is used."""
 
-    We call the endpoint coroutine directly with a minimal fake Request so
-    we don't need to boot a TestClient (which would also start the
-    background game loop + DB init).
+    def __init__(self, payload: dict) -> None:
+        self._payload = payload
+
+    async def json(self) -> dict:
+        return self._payload
+
+
+@pytest.fixture
+def _isolated_game_state():
+    """Snapshot-and-restore the module-level ``main.game_state`` around a test.
+
+    Admin-endpoint tests need to mutate ``active_events`` / ``event_log`` to
+    exercise the cap.  Doing that on the real global is fine for a serial
+    pytest run but would race under ``pytest-xdist``.  The fixture replaces
+    ``main.game_state`` with a fresh ``GameState`` instance for the duration
+    of the test, then restores the original — keeping other tests
+    oblivious.  Works today under the default serial runner and is
+    compatible with future parallelism (each worker gets its own module).
     """
     import main
 
-    original = list(main.game_state.active_events)
+    original = main.game_state
+    main.game_state = main.initialize_game_state()
+    try:
+        yield main
+    finally:
+        main.game_state = original
+
+
+def test_admin_trigger_event_enforces_active_events_cap(_isolated_game_state) -> None:
+    """Calling the admin handler while at the cap must raise HTTP 409."""
+    main = _isolated_game_state
     main.game_state.active_events = [
         main.GameEvent(
             event_type="plant_outage",
@@ -134,61 +162,33 @@ def test_admin_trigger_event_enforces_active_events_cap() -> None:
         for i in range(main.MAX_ACTIVE_EVENTS)
     ]
 
-    class _FakeRequest:
-        def __init__(self, payload: dict) -> None:
-            self._payload = payload
-
-        async def json(self) -> dict:
-            return self._payload
-
     req = _FakeRequest({"key": "test-admin-key", "event_type": "plant_outage", "zone": "DE"})
-    try:
-        with pytest.raises(HTTPException) as exc_info:
-            asyncio.run(main.admin_trigger_event(req))  # type: ignore[arg-type]
-        assert exc_info.value.status_code == 409
-        assert "max" in str(exc_info.value.detail).lower()
-    finally:
-        main.game_state.active_events = original
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(main.admin_trigger_event(req))  # type: ignore[arg-type]
+    assert exc_info.value.status_code == 409
+    assert "max" in str(exc_info.value.detail).lower()
 
 
-def test_admin_trigger_event_allows_when_below_cap() -> None:
+def test_admin_trigger_event_allows_when_below_cap(_isolated_game_state) -> None:
     """With no active events, the admin trigger must still succeed —
     confirming the new cap check doesn't regress the happy path."""
-    import main
-
-    original = list(main.game_state.active_events)
-    original_log = list(main.game_state.event_log)
+    main = _isolated_game_state
     main.game_state.active_events = []
 
-    class _FakeRequest:
-        def __init__(self, payload: dict) -> None:
-            self._payload = payload
-
-        async def json(self) -> dict:
-            return self._payload
-
     req = _FakeRequest({"key": "test-admin-key", "event_type": "plant_outage", "zone": "DE"})
-    try:
-        result = asyncio.run(main.admin_trigger_event(req))  # type: ignore[arg-type]
-        assert result["status"] == "Event triggered"
-        assert result["event_type"] == "plant_outage"
-        assert len(main.game_state.active_events) == 1
-    finally:
-        main.game_state.active_events = original
-        main.game_state.event_log = original_log
+    result = asyncio.run(main.admin_trigger_event(req))  # type: ignore[arg-type]
+    assert result["status"] == "Event triggered"
+    assert result["event_type"] == "plant_outage"
+    assert len(main.game_state.active_events) == 1
 
 
-def test_admin_trigger_event_rejects_wrong_key() -> None:
+def test_admin_trigger_event_rejects_wrong_key(_isolated_game_state) -> None:
     """Auth check must still fire before the new cap check — otherwise the
     409 would leak the cap's existence to unauthenticated callers."""
-    import main
-
-    class _FakeRequest:
-        async def json(self) -> dict:
-            return {"key": "wrong", "event_type": "plant_outage", "zone": "DE"}
-
+    main = _isolated_game_state
+    req = _FakeRequest({"key": "wrong", "event_type": "plant_outage", "zone": "DE"})
     with pytest.raises(HTTPException) as exc_info:
-        asyncio.run(main.admin_trigger_event(_FakeRequest()))  # type: ignore[arg-type]
+        asyncio.run(main.admin_trigger_event(req))  # type: ignore[arg-type]
     assert exc_info.value.status_code == 403
 
 
@@ -207,25 +207,25 @@ def _main_module():
 
 
 def test_validate_da_bid_accepts_good_input(_main_module) -> None:
-    result = _main_module.validate_da_bid("buy", 100, 42.0)
-    assert isinstance(result, tuple)
-    action, mw, price = result
+    ok, payload = _main_module.validate_da_bid("buy", 100, 42.0)
+    assert ok is True
+    action, mw, price = payload
     assert action == "BUY"
     assert mw == 100.0
     assert price == 42.0
 
 
 def test_validate_da_bid_normalises_sell(_main_module) -> None:
-    result = _main_module.validate_da_bid("sell", 50.5, -10.0)
-    assert isinstance(result, tuple)
-    assert result[0] == "SELL"
+    ok, payload = _main_module.validate_da_bid("sell", 50.5, -10.0)
+    assert ok is True
+    assert payload[0] == "SELL"
 
 
 def test_validate_da_bid_clamps_mw_to_battery_max(_main_module) -> None:
     huge = _main_module.BATTERY_MAX_MW * 10
-    result = _main_module.validate_da_bid("BUY", huge, 50.0)
-    assert isinstance(result, tuple)
-    _, mw, _ = result
+    ok, payload = _main_module.validate_da_bid("BUY", huge, 50.0)
+    assert ok is True
+    _, mw, _ = payload
     assert mw == float(_main_module.BATTERY_MAX_MW)
 
 
@@ -247,27 +247,41 @@ def test_validate_da_bid_clamps_mw_to_battery_max(_main_module) -> None:
     ],
 )
 def test_validate_da_bid_rejects_bad_input(_main_module, action, mw, price, hint) -> None:
-    result = _main_module.validate_da_bid(action, mw, price)
-    assert isinstance(result, str), (
-        f"Expected error string for ({action!r}, {mw!r}, {price!r}); got {result!r}"
+    ok, err = _main_module.validate_da_bid(action, mw, price)
+    assert ok is False, (
+        f"Expected rejection for ({action!r}, {mw!r}, {price!r}); got ok=True payload={err!r}"
     )
-    assert hint in result, f"Expected error to mention {hint!r}; got {result!r}"
+    assert isinstance(err, str)
+    assert hint in err, f"Expected error to mention {hint!r}; got {err!r}"
 
 
 def test_validate_da_bid_rejects_booleans_as_numbers(_main_module) -> None:
     """`isinstance(True, (int, float))` is True in Python, but booleans
     should not be accepted as DA bid prices / volumes — they nearly always
     indicate a client serialisation bug."""
-    assert isinstance(_main_module.validate_da_bid("BUY", True, 50.0), str)
-    assert isinstance(_main_module.validate_da_bid("BUY", 100, False), str)
+    assert _main_module.validate_da_bid("BUY", True, 50.0)[0] is False
+    assert _main_module.validate_da_bid("BUY", 100, False)[0] is False
+
+
+def test_validate_da_bid_rejects_price_just_above_max(_main_module) -> None:
+    """Pin the upper bound precisely — if someone raises DA_BID_PRICE_MAX
+    this test forces them to update the constant-sanity test below too."""
+    over = _main_module.DA_BID_PRICE_MAX + 1.0
+    ok, err = _main_module.validate_da_bid("BUY", 100, over)
+    assert ok is False
+    assert "between" in err
 
 
 def test_da_bid_price_bounds_are_sane(_main_module) -> None:
     """Sanity-check the constants themselves so an accidental swap (min>max)
     or a wildly unrealistic bound gets caught here rather than in
-    production traffic."""
+    production traffic.  The upper bound must comfortably exceed the
+    largest event-driven price_mod in optimus/constants.py (~25 EUR/MWh on
+    top of baseline prices in the 20-80 EUR/MWh range), but still reject
+    clearly-broken inputs like 10^6."""
     assert _main_module.DA_BID_PRICE_MIN < 0  # DA prices can go negative
-    assert _main_module.DA_BID_PRICE_MAX > 1000  # must exceed historical peaks
+    assert _main_module.DA_BID_PRICE_MAX >= 1000  # must exceed historical peaks
+    assert _main_module.DA_BID_PRICE_MAX <= 10_000  # must still catch garbage inputs
     assert _main_module.DA_BID_PRICE_MIN < _main_module.DA_BID_PRICE_MAX
     assert math.isfinite(_main_module.DA_BID_PRICE_MIN)
     assert math.isfinite(_main_module.DA_BID_PRICE_MAX)
@@ -312,3 +326,44 @@ def test_websocket_handler_logs_full_traceback() -> None:
     assert "traceback.print_exc()" in window, (
         "Websocket exception handler must call traceback.print_exc()."
     )
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Bug 6 (FOLLOW-UP): the websocket error logger originally used ``token[:8]``
+# directly, which would raise ``TypeError`` if ``token`` was ever ``None`` —
+# a secondary error inside an exception handler would shadow the real one.
+# The new ``_safe_token_id`` helper guarantees a string result.
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def test_safe_token_id_handles_none() -> None:
+    import main
+
+    assert main._safe_token_id(None) == "<unknown>"
+
+
+def test_safe_token_id_handles_empty_string() -> None:
+    import main
+
+    assert main._safe_token_id("") == "<unknown>"
+
+
+def test_safe_token_id_handles_short_token() -> None:
+    """Slicing a 3-char string with ``[:8]`` is already safe in Python, but
+    we want the helper to return the whole token rather than pad or error."""
+    import main
+
+    assert main._safe_token_id("abc") == "abc"
+
+
+def test_safe_token_id_truncates_long_token() -> None:
+    import main
+
+    token = "a" * 64
+    assert main._safe_token_id(token) == "a" * 8
+
+
+def test_safe_token_id_respects_custom_length() -> None:
+    import main
+
+    assert main._safe_token_id("abcdefghij", length=4) == "abcd"
