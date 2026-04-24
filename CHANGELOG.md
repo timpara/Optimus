@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/timpara/Optimus/compare/v0.1.1...v0.2.0) (2026-04-24)
+
+
+### Features
+
+* **ui:** improve legibility across UI ([#15](https://github.com/timpara/Optimus/issues/15)) ([0a7caa3](https://github.com/timpara/Optimus/commit/0a7caa32a06a3b23713d0349ca39f02d68e189b8))
+
+
+### Bug Fixes
+
+* address bugs found in April 2026 audit ([#16](https://github.com/timpara/Optimus/issues/16)) ([3fc1386](https://github.com/timpara/Optimus/commit/3fc13860f500dbad7549179eca91b21cc5360da7))
+
 ## [0.1.1](https://github.com/timpara/Optimus/compare/v0.1.0...v0.1.1) (2026-04-22)
 
 
