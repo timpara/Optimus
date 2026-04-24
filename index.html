@@ -30,16 +30,17 @@
                         'terminal': {
                             bg: '#0a0e17',
                             panel: '#111827',
-                            border: '#1e293b',
+                            border: '#334155',
                             green: '#00ff88',
-                            red: '#ff4444',
-                            amber: '#ffaa00',
-                            blue: '#3b82f6',
-                            cyan: '#06b6d4',
-                            muted: '#64748b',
+                            red: '#ff6666',
+                            amber: '#ffbb33',
+                            blue: '#60a5fa',
+                            cyan: '#22d3ee',
+                            muted: '#94a3b8',
                         }
                     },
                     fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
                         mono: ['"JetBrains Mono"', '"Fira Code"', 'Consolas', 'monospace'],
                     }
                 }
@@ -47,67 +48,96 @@
         }
     </script>
 
-    <!-- ── Custom Styles (Bloomberg Terminal aesthetic) ── -->
+    <!-- ── Custom Styles (Bloomberg Terminal aesthetic, readability-tuned) ── -->
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
         * { box-sizing: border-box; }
 
+        :root {
+            --color-bg: #0a0e17;
+            --color-panel: #111827;
+            --color-border: #334155;
+            --color-text: #f1f5f9;
+            --color-muted: #94a3b8;
+        }
+
         body {
-            background: #0a0e17;
-            color: #e2e8f0;
-            font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+            background: var(--color-bg);
+            color: var(--color-text);
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            font-size: 14px;
+            line-height: 1.45;
             margin: 0;
             overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Numeric values should stay monospaced for alignment and terminal feel */
+        .num, .font-mono, input[type="number"], code, pre,
+        #headerDay, #headerHour, #headerRealizedPnl, #headerFloatingPnl,
+        #dePriceLarge, #batteryPctText, #batteryMwhText, #cashDisplay,
+        #sohPctText, #cycleCount, #effectiveCapacity, #rtEfficiency,
+        #tradeAmountDisplay, #costPreview, #avgBuyPrice, #avgSellPrice,
+        #portfolioSpread, #totalBought, #totalSold, #tradeCount,
+        #maxRateDisplay, #taperPctText {
+            font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+            font-variant-numeric: tabular-nums;
         }
 
         /* Scrollbar styling */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #0a0e17; }
-        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--color-bg); }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
 
         /* Leaflet map overrides for dark theme */
         .leaflet-container { background: #0a0e17 !important; }
-        .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.8) contrast(1.2); }
+        .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(1.15); }
         .leaflet-control-zoom a {
             background: #111827 !important;
-            color: #e2e8f0 !important;
-            border-color: #1e293b !important;
+            color: #f1f5f9 !important;
+            border-color: #334155 !important;
+            font-size: 16px !important;
         }
 
         /* Country label on map */
         .zone-label {
-            background: rgba(10, 14, 23, 0.85);
-            border: 1px solid #1e293b;
+            background: rgba(10, 14, 23, 0.95);
+            border: 1px solid #475569;
             border-radius: 4px;
-            padding: 3px 7px;
+            padding: 4px 8px;
             font-family: 'JetBrains Mono', monospace;
-            font-size: 11px;
+            font-weight: 600;
+            font-size: 13px;
             white-space: nowrap;
-            color: #e2e8f0;
+            color: #f1f5f9;
             pointer-events: none;
         }
 
         /* Interconnector flow label */
         .flow-label {
-            background: rgba(10, 14, 23, 0.9);
-            border: 1px solid #1e293b;
+            background: rgba(10, 14, 23, 0.95);
+            border: 1px solid #475569;
             border-radius: 3px;
-            padding: 2px 6px;
+            padding: 3px 7px;
             font-family: 'JetBrains Mono', monospace;
-            font-size: 10px;
+            font-weight: 500;
+            font-size: 12px;
             white-space: nowrap;
+            color: #f1f5f9;
             pointer-events: none;
         }
         .flow-label.congested {
-            border-color: #ff4444;
-            color: #ff4444;
+            border-color: #ff6666;
+            color: #ff6666;
             animation: pulse-red 1s ease-in-out infinite;
         }
 
         @keyframes pulse-red {
-            0%, 100% { box-shadow: 0 0 4px rgba(255, 68, 68, 0.3); }
-            50% { box-shadow: 0 0 12px rgba(255, 68, 68, 0.7); }
+            0%, 100% { box-shadow: 0 0 4px rgba(255, 102, 102, 0.3); }
+            50% { box-shadow: 0 0 12px rgba(255, 102, 102, 0.7); }
         }
 
         /* Battery gauge animation */
@@ -163,35 +193,55 @@
         .lb-row:nth-child(2) .lb-rank { color: #c0c0c0; } /* Silver */
         .lb-row:nth-child(3) .lb-rank { color: #cd7f32; } /* Bronze */
 
-        /* News ticker scrolling animation */
+        /* News ticker scrolling animation (slowed for readability) */
         @keyframes ticker-scroll {
             0% { transform: translateX(100%); }
             100% { transform: translateX(-100%); }
         }
         .ticker-scroll {
-            animation: ticker-scroll 30s linear infinite;
+            animation: ticker-scroll 60s linear infinite;
+            color: #cbd5e1;
+            font-size: 13px;
         }
         .ticker-scroll:hover {
             animation-play-state: paused;
         }
 
         /* Event type color coding */
-        .event-breaking { color: #ff4444; }
-        .event-active { color: #ffaa00; }
-        .event-ended { color: #64748b; }
+        .event-breaking { color: #ff6666; }
+        .event-active { color: #ffbb33; }
+        .event-ended { color: #94a3b8; }
+
+        /* Section / panel titles — reduce typographic noise */
+        .panel-title {
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+
+        /* Higher-contrast placeholders */
+        ::placeholder {
+            color: #94a3b8 !important;
+            opacity: 1 !important;
+        }
+
+        /* Table rhythm — more breathing room */
+        table th, table td {
+            padding-top: 0.375rem;
+            padding-bottom: 0.375rem;
+        }
 
         /* Mobile-responsive adjustments */
         @media (max-width: 768px) {
-            body { font-size: 12px; }
+            body { font-size: 13px; }
             .btn-buy, .btn-sell { min-height: 48px; }  /* Touch-friendly */
             #tradeSlider { height: 24px; }  /* Easier to drag on touch */
 
             /* Reduce fixed-height panels on mobile */
-            .mobile-map { height: 180px !important; }
-            .mobile-chart { height: 150px !important; }
-            .mobile-chart-inner { height: 120px !important; }
-            .mobile-weather { height: 140px !important; }
-            .mobile-health-chart { height: 90px !important; }
+            .mobile-map { height: 200px !important; }
+            .mobile-chart { height: 170px !important; }
+            .mobile-chart-inner { height: 130px !important; }
+            .mobile-weather { height: 160px !important; }
+            .mobile-health-chart { height: 100px !important; }
 
             /* Reorder: trade controls appear before map/chart on mobile */
             .mobile-trade-first { order: -2; }
@@ -201,7 +251,8 @@
             .mobile-collapsible > summary {
                 cursor: pointer;
                 list-style: none;
-                padding: 8px 12px;
+                padding: 10px 12px;
+                font-size: 14px;
             }
             .mobile-collapsible > summary::-webkit-details-marker { display: none; }
             .mobile-collapsible > summary::before {
@@ -237,38 +288,38 @@
             <!-- Logo / Title -->
             <div class="text-center mb-8">
                 <div class="text-4xl mb-2">&#9889;</div>
-                <h1 class="text-2xl font-bold text-terminal-green tracking-wider">BATTERY TRADER SIM</h1>
+                <h1 class="text-2xl font-bold text-terminal-green">BATTERY TRADER SIM</h1>
                 <p class="text-terminal-muted text-sm mt-2">50 GWh Grid Battery &bull; European Energy Markets</p>
             </div>
 
             <!-- Login Form -->
             <div class="space-y-4">
                 <div>
-                    <label class="block text-xs text-terminal-muted uppercase tracking-wider mb-1">Username</label>
+                    <label class="block text-sm text-terminal-muted uppercase mb-1">Username</label>
                     <input id="loginUsername" type="text" maxlength="20" placeholder="Enter your trader name"
-                        class="w-full bg-terminal-bg border border-terminal-border rounded px-3 py-2 text-sm
-                               text-terminal-green placeholder-terminal-muted/50 focus:border-terminal-green
+                        class="w-full bg-terminal-bg border border-terminal-border rounded px-3 py-2.5 text-base
+                               text-terminal-green placeholder-terminal-muted focus:border-terminal-green
                                focus:outline-none focus:ring-1 focus:ring-terminal-green/30" />
                 </div>
                 <div>
-                    <label class="block text-xs text-terminal-muted uppercase tracking-wider mb-1">Class Password</label>
+                    <label class="block text-sm text-terminal-muted uppercase mb-1">Class Password</label>
                     <input id="loginPassword" type="password" placeholder="Enter class password"
-                        class="w-full bg-terminal-bg border border-terminal-border rounded px-3 py-2 text-sm
-                               text-terminal-green placeholder-terminal-muted/50 focus:border-terminal-green
+                        class="w-full bg-terminal-bg border border-terminal-border rounded px-3 py-2.5 text-base
+                               text-terminal-green placeholder-terminal-muted focus:border-terminal-green
                                focus:outline-none focus:ring-1 focus:ring-terminal-green/30" />
                 </div>
 
-                <div id="loginError" class="text-terminal-red text-xs hidden"></div>
+                <div id="loginError" class="text-terminal-red text-sm hidden"></div>
 
                 <div class="pt-2">
                     <button onclick="handleLogin()"
                         class="w-full bg-terminal-green/20 border border-terminal-green/40 text-terminal-green
-                               rounded py-2.5 text-sm font-bold hover:bg-terminal-green/30 transition-colors tracking-wider">
+                               rounded py-3 text-base font-bold hover:bg-terminal-green/30 transition-colors">
                         &#9889; PLAY
                     </button>
                 </div>
 
-                <p class="text-terminal-muted text-xs text-center mt-4">
+                <p class="text-terminal-muted text-sm text-center mt-4">
                     Enter your trader name and class password to join or resume.
                 </p>
             </div>
@@ -284,10 +335,10 @@
         <header class="bg-terminal-panel border-b border-terminal-border px-2 md:px-4 py-2 flex items-center justify-between shrink-0">
             <div class="flex items-center gap-2 md:gap-3">
                 <span class="text-xl">&#9889;</span>
-                <h1 class="text-terminal-green font-bold text-xs md:text-sm tracking-widest">BATTERY TRADER</h1>
-                <span class="text-terminal-muted text-xs hidden md:inline">v2.0</span>
+                <h1 class="text-terminal-green font-bold text-sm md:text-base tracking-widest">BATTERY TRADER</h1>
+                <span class="text-terminal-muted text-sm hidden md:inline">v2.0</span>
             </div>
-            <div class="flex items-center gap-2 md:gap-4 text-xs">
+            <div class="flex items-center gap-2 md:gap-4 text-sm">
                 <!-- Game Clock -->
                 <div class="flex items-center gap-1 md:gap-2">
                     <span class="text-terminal-muted hidden sm:inline">DAY</span>
@@ -302,7 +353,7 @@
                     <span class="text-terminal-muted">TRADER</span>
                     <span id="headerUsername" class="text-white font-medium">—</span>
                     <button onclick="handleLogout()" title="Logout"
-                        class="text-terminal-muted hover:text-terminal-red text-xs ml-1 transition-colors">
+                        class="text-terminal-muted hover:text-terminal-red text-sm ml-1 transition-colors">
                         [exit]
                     </button>
                 </div>
@@ -319,24 +370,24 @@
                 <!-- Connection Status -->
                 <div id="wsStatus" class="w-2 h-2 rounded-full bg-terminal-red" title="Disconnected"></div>
                 <!-- Tutorial trigger -->
-                <button onclick="startTutorial()" class="text-terminal-muted text-xs hover:text-terminal-green transition-colors" title="Show tutorial">?</button>
+                <button onclick="startTutorial()" class="text-terminal-muted text-sm hover:text-terminal-green transition-colors" title="Show tutorial">?</button>
                 <!-- Sound toggle -->
-                <button onclick="toggleSound()" id="soundToggle" class="text-terminal-muted text-xs hover:text-terminal-green transition-colors" title="Toggle sound (M)">&#9834;</button>
+                <button onclick="toggleSound()" id="soundToggle" class="text-terminal-muted text-sm hover:text-terminal-green transition-colors" title="Toggle sound (M)">&#9834;</button>
             </div>
         </header>
 
         <!-- ── NEWS TICKER BAR ── -->
-        <div id="newsTicker" class="bg-terminal-bg border-b border-terminal-border px-4 py-1 flex items-center gap-3 overflow-hidden shrink-0" style="height: 28px;">
-            <span class="text-terminal-amber text-xs font-bold tracking-wider shrink-0">NEWS</span>
+        <div id="newsTicker" class="bg-terminal-bg border-b border-terminal-border px-4 py-1 flex items-center gap-3 overflow-hidden shrink-0" style="height: 34px;">
+            <span class="text-terminal-amber text-sm font-bold shrink-0">NEWS</span>
             <div class="w-px h-3 bg-terminal-border shrink-0"></div>
-            <div id="newsTickerContent" class="text-xs text-terminal-muted whitespace-nowrap overflow-hidden ticker-scroll">
+            <div id="newsTickerContent" class="text-sm text-terminal-muted whitespace-nowrap overflow-hidden ticker-scroll">
                 Waiting for market data...
             </div>
         </div>
 
         <!-- ── ACTIVE EVENTS BAR (always visible, fixed height) ── -->
-        <div id="activeEventsBar" class="bg-terminal-red/10 border-b border-terminal-red/30 px-4 shrink-0 flex items-center" style="height: 28px;">
-            <div id="activeEventsContent" class="flex items-center gap-4 text-xs overflow-x-auto w-full">
+        <div id="activeEventsBar" class="bg-terminal-red/10 border-b border-terminal-red/30 px-4 shrink-0 flex items-center" style="height: 34px;">
+            <div id="activeEventsContent" class="flex items-center gap-4 text-sm overflow-x-auto w-full">
                 <span class="text-terminal-muted">No active events</span>
             </div>
         </div>
@@ -354,11 +405,11 @@
                 <div class="bg-terminal-panel border border-terminal-border rounded-lg panel-glow flex flex-col shrink-0 mobile-map" style="height: 300px;">
                     <div class="px-3 py-2 border-b border-terminal-border flex items-center justify-between">
                         <div class="flex items-center gap-2">
-                            <span class="text-terminal-green text-xs font-bold tracking-wider">MARKET MAP</span>
-                            <span class="text-terminal-muted text-xs">— Central Europe Price Heatmap</span>
+                            <span class="text-terminal-green text-sm font-bold">MARKET MAP</span>
+                            <span class="text-terminal-muted text-sm">— Central Europe Price Heatmap</span>
                         </div>
                         <!-- Map legend -->
-                        <div class="flex items-center gap-2 text-xs">
+                        <div class="flex items-center gap-2 text-sm">
                             <span class="text-terminal-muted">Price:</span>
                             <div class="flex items-center gap-1">
                                 <div class="w-3 h-3 rounded" style="background: #00ff88;"></div>
@@ -380,8 +431,8 @@
                 <!-- ── PRICE CHART PANEL ── -->
                 <div class="bg-terminal-panel border border-terminal-border rounded-lg panel-glow shrink-0 mobile-chart" style="height: 220px;">
                     <div class="px-3 py-2 border-b border-terminal-border">
-                        <span class="text-terminal-green text-xs font-bold tracking-wider">PRICE HISTORY</span>
-                        <span class="text-terminal-muted text-xs"> — EUR/MWh (last 72 hours)</span>
+                        <span class="text-terminal-green text-sm font-bold">PRICE HISTORY</span>
+                        <span class="text-terminal-muted text-sm"> — EUR/MWh (last 72 hours)</span>
                     </div>
                     <div class="p-2 mobile-chart-inner" style="height: 178px;">
                         <canvas id="priceChart"></canvas>
@@ -393,9 +444,9 @@
 
                     <!-- ── ZONE PRICES TABLE ── -->
                     <div class="bg-terminal-panel border border-terminal-border rounded-lg p-3 panel-glow flex flex-col min-h-0">
-                        <div class="text-terminal-muted text-xs tracking-wider mb-2 shrink-0">ALL ZONE PRICES</div>
+                        <div class="text-terminal-muted text-sm mb-2 shrink-0">ALL ZONE PRICES</div>
                         <div class="overflow-y-auto flex-1 min-h-0">
-                            <table class="w-full text-xs">
+                            <table class="w-full text-sm">
                                 <thead class="sticky top-0 bg-terminal-panel">
                                     <tr class="text-terminal-muted border-b border-terminal-border">
                                         <th class="text-left py-1">Zone</th>
@@ -411,15 +462,15 @@
 
                     <!-- ── INTERCONNECTOR STATUS ── -->
                     <div class="bg-terminal-panel border border-terminal-border rounded-lg p-3 panel-glow flex flex-col min-h-0">
-                        <div class="text-terminal-muted text-xs tracking-wider mb-2 shrink-0">INTERCONNECTORS</div>
+                        <div class="text-terminal-muted text-sm mb-2 shrink-0">INTERCONNECTORS</div>
                         <div id="interconnectorList" class="space-y-2 overflow-y-auto flex-1 min-h-0"></div>
                     </div>
 
                     <!-- ── LEADERBOARD ── -->
                     <div class="bg-terminal-panel border border-terminal-border rounded-lg p-3 panel-glow flex flex-col min-h-0">
-                        <div class="text-terminal-muted text-xs tracking-wider mb-2 shrink-0">TOP TRADERS</div>
+                        <div class="text-terminal-muted text-sm mb-2 shrink-0">TOP TRADERS</div>
                         <div class="overflow-y-auto flex-1 min-h-0">
-                            <table class="w-full text-xs">
+                            <table class="w-full text-sm">
                                 <thead class="sticky top-0 bg-terminal-panel">
                                     <tr class="text-terminal-muted border-b border-terminal-border">
                                         <th class="text-left py-1 w-8">#</th>
@@ -446,16 +497,16 @@
                 <div class="bg-terminal-panel border border-terminal-border rounded-lg p-4 panel-glow">
                     <div class="flex items-center justify-between">
                         <div>
-                            <div class="text-terminal-muted text-xs tracking-wider">GERMANY SPOT PRICE</div>
-                            <div id="dePriceLarge" class="text-3xl font-bold text-terminal-green mt-1">€45.00</div>
-                            <div class="text-terminal-muted text-xs mt-1">EUR/MWh</div>
+                            <div class="text-terminal-muted text-sm">GERMANY SPOT PRICE</div>
+                            <div id="dePriceLarge" class="text-4xl font-bold text-terminal-green mt-1">€45.00</div>
+                            <div class="text-terminal-muted text-sm mt-1">EUR/MWh</div>
                             <!-- New: vs average buy price indicator -->
-                            <div id="vsAvgIndicator" class="text-xs mt-1 hidden">
+                            <div id="vsAvgIndicator" class="text-sm mt-1 hidden">
                                 vs your avg buy: <span id="vsAvgText" class="font-bold">—</span>
                             </div>
                         </div>
                         <div class="text-right">
-                            <div id="deWeatherInfo" class="text-xs text-terminal-muted space-y-1">
+                            <div id="deWeatherInfo" class="text-sm text-terminal-muted space-y-1">
                                 <div>Wind: <span id="deWind" class="text-white">6.0</span> m/s</div>
                                 <div>Solar: <span id="deSolar" class="text-white">0%</span></div>
                                 <div>Temp: <span id="deTemp" class="text-white">15°C</span></div>
@@ -466,17 +517,17 @@
 
                 <!-- ── WEATHER FORECAST (NEW) ── -->
                 <details class="mobile-collapsible" open>
-                    <summary class="bg-terminal-panel border border-terminal-border rounded-lg text-terminal-muted text-xs tracking-wider md:hidden">WEATHER FORECAST</summary>
+                    <summary class="bg-terminal-panel border border-terminal-border rounded-lg text-terminal-muted text-sm md:hidden">WEATHER FORECAST</summary>
                 <div class="panel-content bg-terminal-panel border border-terminal-border rounded-lg panel-glow flex flex-col mobile-weather" style="height: 180px;">
                     <div class="flex items-center justify-between px-3 pt-3 pb-2 shrink-0">
-                        <span class="text-terminal-muted text-xs tracking-wider">WEATHER FORECAST</span>
-                        <span class="text-terminal-muted text-xs">next 6h</span>
+                        <span class="text-terminal-muted text-sm">WEATHER FORECAST</span>
+                        <span class="text-terminal-muted text-sm">next 6h</span>
                     </div>
 
                     <div class="overflow-y-auto px-3 pb-3 min-h-0 flex-1">
                         <!-- Forecast-vs-Actual comparison (current hour) -->
-                        <div id="forecastDeviation" class="mb-2 p-2 bg-terminal-bg rounded text-xs space-y-1">
-                            <div class="text-terminal-muted text-xs font-bold mb-1">ACTUAL vs FORECAST (now)</div>
+                        <div id="forecastDeviation" class="mb-2 p-2 bg-terminal-bg rounded text-sm space-y-1">
+                            <div class="text-terminal-muted text-sm font-bold mb-1">ACTUAL vs FORECAST (now)</div>
                             <div id="deviationRows"></div>
                         </div>
 
@@ -485,7 +536,7 @@
 
                         <!-- Storm warnings -->
                         <div id="stormWarnings" class="mt-2 hidden">
-                            <div class="text-terminal-red text-xs font-bold storm-active" id="stormWarningText"></div>
+                            <div class="text-terminal-red text-sm font-bold storm-active" id="stormWarningText"></div>
                         </div>
                     </div>
                 </div>
@@ -494,43 +545,43 @@
                 <!-- ── BATTERY GAUGE ── -->
                 <div class="bg-terminal-panel border border-terminal-border rounded-lg p-4 panel-glow mobile-battery-first">
                     <div class="flex items-center justify-between mb-2">
-                        <span class="text-terminal-muted text-xs tracking-wider">BATTERY STATUS</span>
-                        <span id="batteryPctText" class="text-terminal-green text-xs font-bold">50.0%</span>
+                        <span class="text-terminal-muted text-sm">BATTERY STATUS</span>
+                        <span id="batteryPctText" class="text-terminal-green text-sm font-bold">50.0%</span>
                     </div>
                     <!-- Battery graphic -->
                     <div class="relative">
                         <div class="w-full h-8 bg-terminal-bg rounded border border-terminal-border overflow-hidden flex">
                             <div id="batteryFill" class="battery-fill h-full rounded-l" style="width: 50%; background: #10b981;"></div>
                         </div>
-                        <div class="absolute inset-0 flex items-center justify-center text-xs font-bold">
+                        <div class="absolute inset-0 flex items-center justify-center text-sm font-bold">
                             <span id="batteryMwhText" class="drop-shadow-lg">25,000 / 50,000 MWh</span>
                         </div>
                     </div>
                     <!-- Power rate indicator -->
-                    <div class="flex justify-between mt-2 text-xs text-terminal-muted">
+                    <div class="flex justify-between mt-2 text-sm text-terminal-muted">
                         <span>Max Rate: <span id="maxRateDisplay">10 GW</span></span>
                         <span>Cash: <span id="cashDisplay" class="text-white">€0.00</span></span>
                     </div>
                     <!-- Taper warning (hidden by default) -->
-                    <div id="taperWarning" class="mt-1 text-xs text-terminal-amber hidden">
+                    <div id="taperWarning" class="mt-1 text-sm text-terminal-amber hidden">
                         CHARGE TAPER: <span id="taperPctText">100%</span> rate (SoC &gt; 80%)
                     </div>
                 </div>
 
                 <!-- ── BATTERY HEALTH ── -->
                 <details class="mobile-collapsible" open>
-                    <summary class="bg-terminal-panel border border-terminal-border rounded-lg text-terminal-muted text-xs tracking-wider md:hidden">BATTERY HEALTH</summary>
+                    <summary class="bg-terminal-panel border border-terminal-border rounded-lg text-terminal-muted text-sm md:hidden">BATTERY HEALTH</summary>
                 <div class="panel-content bg-terminal-panel border border-terminal-border rounded-lg p-3 panel-glow">
                     <div class="flex items-center justify-between mb-2">
-                        <span class="text-terminal-muted text-xs tracking-wider">BATTERY HEALTH</span>
-                        <span id="sohPctText" class="text-terminal-green text-xs font-bold">100.0% SoH</span>
+                        <span class="text-terminal-muted text-sm">BATTERY HEALTH</span>
+                        <span id="sohPctText" class="text-terminal-green text-sm font-bold">100.0% SoH</span>
                     </div>
                     <!-- Health chart -->
                     <div class="mobile-health-chart" style="height: 120px;">
                         <canvas id="healthChart"></canvas>
                     </div>
                     <!-- Metrics row -->
-                    <div class="grid grid-cols-3 gap-2 mt-2 text-xs">
+                    <div class="grid grid-cols-3 gap-2 mt-2 text-sm">
                         <div class="bg-terminal-bg rounded p-1.5 text-center">
                             <div class="text-terminal-muted">Cycles</div>
                             <div id="cycleCount" class="font-bold text-white">0 / 5,000</div>
@@ -549,86 +600,86 @@
 
                 <!-- ── TRADING CONTROLS ── -->
                 <div class="bg-terminal-panel border border-terminal-border rounded-lg p-4 panel-glow mobile-trade-first">
-                    <div class="text-terminal-muted text-xs tracking-wider mb-3">TRADE EXECUTION</div>
+                    <div class="text-terminal-muted text-sm mb-3">TRADE EXECUTION</div>
                     <!-- MW Slider -->
                     <div class="mb-3">
-                        <div class="flex justify-between text-xs mb-1">
+                        <div class="flex justify-between text-sm mb-1">
                             <span class="text-terminal-muted">Trade Size (MW)</span>
                             <span id="tradeAmountDisplay" class="text-white font-bold">1,000 MW</span>
                         </div>
                         <input id="tradeSlider" type="range" min="100" max="10000" step="100" value="1000"
                             class="w-full h-2 bg-terminal-bg rounded-lg appearance-none cursor-pointer
                                    accent-terminal-green" oninput="updateTradeAmount()" />
-                        <div class="flex justify-between text-xs text-terminal-muted mt-1">
+                        <div class="flex justify-between text-sm text-terminal-muted mt-1">
                             <span>100 MW</span>
                             <span>10,000 MW</span>
                         </div>
                     </div>
                     <!-- Cost preview -->
-                    <div id="costPreview" class="text-xs text-terminal-muted mb-3 text-center">
+                    <div id="costPreview" class="text-sm text-terminal-muted mb-3 text-center">
                         Est. cost: €45,000
                     </div>
                     <!-- Buy/Sell buttons -->
                     <div class="grid grid-cols-2 gap-3">
                         <button onclick="executeTrade('BUY')"
-                            class="btn-buy text-white font-bold py-3 rounded text-sm tracking-wider">
-                            BUY<br><span class="text-xs font-normal opacity-80">Charge Battery</span>
+                            class="btn-buy text-white font-bold py-3 rounded text-sm">
+                            BUY<br><span class="text-sm font-normal opacity-80">Charge Battery</span>
                         </button>
                         <button onclick="executeTrade('SELL')"
-                            class="btn-sell text-white font-bold py-3 rounded text-sm tracking-wider">
-                            SELL<br><span class="text-xs font-normal opacity-80">Discharge Battery</span>
+                            class="btn-sell text-white font-bold py-3 rounded text-sm">
+                            SELL<br><span class="text-sm font-normal opacity-80">Discharge Battery</span>
                         </button>
                     </div>
                     <!-- Trade feedback -->
-                    <div id="tradeFeedback" class="text-xs text-center mt-2 h-4"></div>
+                    <div id="tradeFeedback" class="text-sm text-center mt-2 h-4"></div>
                 </div>
 
                 <!-- ── DAY-AHEAD MARKET (NEW) ── -->
                 <div class="bg-terminal-panel border border-terminal-border rounded-lg p-3 panel-glow">
                     <div class="flex items-center justify-between mb-2">
-                        <span class="text-terminal-muted text-xs tracking-wider">DAY-AHEAD AUCTION</span>
-                        <span id="daStatus" class="text-xs text-terminal-amber">Gate open</span>
+                        <span class="text-terminal-muted text-sm">DAY-AHEAD AUCTION</span>
+                        <span id="daStatus" class="text-sm text-terminal-amber">Gate open</span>
                     </div>
-                    <div class="text-xs text-terminal-muted mb-2">
+                    <div class="text-sm text-terminal-muted mb-2">
                         Submit a bid for the next DA clearing at <span class="text-white font-bold">12:00</span>.
                         All accepted bids execute at the uniform clearing price.
                     </div>
                     <!-- DA Bid type -->
                     <div class="grid grid-cols-2 gap-2 mb-2">
                         <button id="daBidBuy" onclick="setDABidType('BUY')"
-                            class="text-xs py-1.5 rounded border border-terminal-green/40 text-terminal-green bg-terminal-green/10 font-medium">
+                            class="text-sm py-1.5 rounded border border-terminal-green/40 text-terminal-green bg-terminal-green/10 font-medium">
                             BID TO BUY
                         </button>
                         <button id="daBidSell" onclick="setDABidType('SELL')"
-                            class="text-xs py-1.5 rounded border border-terminal-border text-terminal-muted">
+                            class="text-sm py-1.5 rounded border border-terminal-border text-terminal-muted">
                             BID TO SELL
                         </button>
                     </div>
                     <!-- DA Price input -->
                     <div class="flex gap-2 mb-2">
                         <div class="flex-1">
-                            <label class="text-xs text-terminal-muted block mb-0.5">Limit Price (EUR/MWh)</label>
+                            <label class="text-sm text-terminal-muted block mb-0.5">Limit Price (EUR/MWh)</label>
                             <input id="daBidPrice" type="number" value="45" step="1" min="-50" max="200"
-                                class="w-full bg-terminal-bg border border-terminal-border rounded px-2 py-1.5 text-xs
+                                class="w-full bg-terminal-bg border border-terminal-border rounded px-2 py-1.5 text-sm
                                        text-white focus:border-terminal-green focus:outline-none" />
                         </div>
                         <div class="flex-1">
-                            <label class="text-xs text-terminal-muted block mb-0.5">Volume (MW)</label>
+                            <label class="text-sm text-terminal-muted block mb-0.5">Volume (MW)</label>
                             <input id="daBidMW" type="number" value="2000" step="100" min="100" max="10000"
-                                class="w-full bg-terminal-bg border border-terminal-border rounded px-2 py-1.5 text-xs
+                                class="w-full bg-terminal-bg border border-terminal-border rounded px-2 py-1.5 text-sm
                                        text-white focus:border-terminal-green focus:outline-none" />
                         </div>
                     </div>
                     <!-- Submit -->
                     <button onclick="submitDABid()"
                         class="w-full bg-terminal-amber/20 border border-terminal-amber/40 text-terminal-amber
-                               rounded py-1.5 text-xs font-medium hover:bg-terminal-amber/30 transition-colors">
+                               rounded py-1.5 text-sm font-medium hover:bg-terminal-amber/30 transition-colors">
                         SUBMIT DA BID
                     </button>
                     <!-- DA feedback -->
-                    <div id="daFeedback" class="text-xs text-center mt-1.5 h-4"></div>
+                    <div id="daFeedback" class="text-sm text-center mt-1.5 h-4"></div>
                     <!-- Last clearing info -->
-                    <div id="daLastClearing" class="mt-2 p-2 bg-terminal-bg rounded text-xs hidden">
+                    <div id="daLastClearing" class="mt-2 p-2 bg-terminal-bg rounded text-sm hidden">
                         <div class="text-terminal-muted font-bold mb-1">LAST CLEARING</div>
                         <div id="daClearingInfo"></div>
                     </div>
@@ -636,12 +687,12 @@
 
                 <!-- ── PORTFOLIO ANALYTICS (NEW) ── -->
                 <details class="mobile-collapsible" open>
-                    <summary class="bg-terminal-panel border border-terminal-border rounded-lg text-terminal-muted text-xs tracking-wider md:hidden">PORTFOLIO</summary>
+                    <summary class="bg-terminal-panel border border-terminal-border rounded-lg text-terminal-muted text-sm md:hidden">PORTFOLIO</summary>
                 <div class="panel-content bg-terminal-panel border border-terminal-border rounded-lg p-3 panel-glow">
-                    <div class="text-terminal-muted text-xs tracking-wider mb-2">PORTFOLIO</div>
+                    <div class="text-terminal-muted text-sm mb-2">PORTFOLIO</div>
 
                     <!-- Key metrics row -->
-                    <div class="grid grid-cols-2 gap-2 text-xs mb-2">
+                    <div class="grid grid-cols-2 gap-2 text-sm mb-2">
                         <div class="bg-terminal-bg rounded p-2">
                             <div class="text-terminal-muted">Avg Buy Price</div>
                             <div id="avgBuyPrice" class="text-terminal-green font-bold text-sm">—</div>
@@ -653,7 +704,7 @@
                     </div>
 
                     <!-- Spread and volume -->
-                    <div class="text-xs space-y-1 mb-2">
+                    <div class="text-sm space-y-1 mb-2">
                         <div class="flex justify-between">
                             <span class="text-terminal-muted">Spread (sell - buy)</span>
                             <span id="portfolioSpread" class="font-bold">—</span>
@@ -673,8 +724,8 @@
                     </div>
 
                     <!-- Recent trades log -->
-                    <div class="text-terminal-muted text-xs font-bold mb-1">RECENT TRADES</div>
-                    <div id="recentTradesLog" class="text-xs space-y-0.5 max-h-32 overflow-y-auto">
+                    <div class="text-terminal-muted text-sm font-bold mb-1">RECENT TRADES</div>
+                    <div id="recentTradesLog" class="text-sm space-y-0.5 max-h-32 overflow-y-auto">
                         <div class="text-terminal-muted">No trades yet</div>
                     </div>
                 </div>
@@ -697,26 +748,26 @@
         <div id="tutorialCard" class="absolute z-10 bg-terminal-panel border border-terminal-green/50 rounded-lg p-5 shadow-2xl"
              style="max-width: 380px;">
             <div class="flex items-center justify-between mb-3">
-                <span class="text-terminal-green text-xs font-bold tracking-wider">TUTORIAL</span>
-                <span id="tutorialStepCounter" class="text-terminal-muted text-xs">1/8</span>
+                <span class="text-terminal-green text-sm font-bold">TUTORIAL</span>
+                <span id="tutorialStepCounter" class="text-terminal-muted text-sm">1/8</span>
             </div>
-            <h3 id="tutorialTitle" class="text-white font-bold text-sm mb-2"></h3>
-            <p id="tutorialText" class="text-terminal-muted text-xs leading-relaxed mb-4"></p>
+            <h3 id="tutorialTitle" class="text-white font-bold text-base mb-2"></h3>
+            <p id="tutorialText" class="text-terminal-muted text-sm leading-relaxed mb-4"></p>
             <div class="flex justify-between items-center">
                 <button onclick="tutorialPrev()"
                     id="tutorialPrevBtn"
-                    class="text-terminal-muted text-xs hover:text-white transition-colors">
+                    class="text-terminal-muted text-sm hover:text-white transition-colors">
                     &larr; Back
                 </button>
                 <div class="flex gap-2">
                     <button onclick="tutorialSkip()"
-                        class="text-terminal-muted text-xs hover:text-white transition-colors">
+                        class="text-terminal-muted text-sm hover:text-white transition-colors">
                         Skip tutorial
                     </button>
                     <button onclick="tutorialNext()"
                         id="tutorialNextBtn"
                         class="bg-terminal-green/20 border border-terminal-green/40 text-terminal-green
-                               rounded px-4 py-1.5 text-xs font-medium hover:bg-terminal-green/30 transition-colors">
+                               rounded px-4 py-1.5 text-sm font-medium hover:bg-terminal-green/30 transition-colors">
                         Next &rarr;
                     </button>
                 </div>
@@ -960,7 +1011,7 @@
         if (data.type === 'da_bid_confirmed') {
             const feedbackEl = document.getElementById('daFeedback');
             feedbackEl.textContent = data.message || 'Bid confirmed';
-            feedbackEl.className = 'text-xs text-center mt-1.5 h-4 text-terminal-green';
+            feedbackEl.className = 'text-sm text-center mt-1.5 h-4 text-terminal-green';
             showToast(data.message || 'DA bid submitted', 'success');
             return;
         }
@@ -970,7 +1021,7 @@
             const daFeedback = document.getElementById('daFeedback');
             if (daFeedback && data.error.includes('DA')) {
                 daFeedback.textContent = data.error;
-                daFeedback.className = 'text-xs text-center mt-1.5 h-4 text-terminal-red';
+                daFeedback.className = 'text-sm text-center mt-1.5 h-4 text-terminal-red';
             }
             return;
         }
@@ -1183,7 +1234,7 @@
             // Update price label
             if (countryLabels[zoneId]) {
                 const priceStr = price < 0 ? `-€${Math.abs(price).toFixed(0)}` : `€${price.toFixed(0)}`;
-                const color = price < 0 ? '#00ff88' : (price > 70 ? '#ff4444' : '#e2e8f0');
+                const color = price < 0 ? '#00ff88' : (price > 70 ? '#ff4444' : '#f1f5f9');
                 countryLabels[zoneId].setIcon(L.divIcon({
                     className: 'zone-label',
                     html: `<strong>${zoneId}</strong> <span style="color:${color}">${priceStr}</span>`,
@@ -1319,7 +1370,7 @@
                     legend: {
                         position: 'top',
                         labels: {
-                            color: '#64748b',
+                            color: '#94a3b8',
                             font: { family: "'JetBrains Mono'", size: 10 },
                             boxWidth: 12,
                             padding: 8,
@@ -1340,14 +1391,14 @@
                     x: {
                         display: true,
                         grid: { color: 'rgba(30, 41, 59, 0.5)' },
-                        ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 12 },
+                        ticks: { color: '#94a3b8', font: { size: 11 }, maxTicksLimit: 12 },
                     },
                     y: {
                         display: true,
                         grid: { color: 'rgba(30, 41, 59, 0.5)' },
                         ticks: {
-                            color: '#64748b',
-                            font: { size: 9 },
+                            color: '#94a3b8',
+                            font: { size: 11 },
                             callback: (val) => `€${val}`,
                         },
                     },
@@ -1496,7 +1547,7 @@
                     legend: {
                         position: 'top',
                         labels: {
-                            color: '#64748b',
+                            color: '#94a3b8',
                             font: { family: "'JetBrains Mono'", size: 9 },
                             boxWidth: 10,
                             padding: 6,
@@ -1520,7 +1571,7 @@
                     x: {
                         display: true,
                         grid: { color: 'rgba(30, 41, 59, 0.5)' },
-                        ticks: { color: '#64748b', font: { size: 8 }, maxTicksLimit: 8 },
+                        ticks: { color: '#94a3b8', font: { size: 10 }, maxTicksLimit: 8 },
                     },
                     y: {
                         display: true,
@@ -1529,8 +1580,8 @@
                         max: 102,
                         grid: { color: 'rgba(30, 41, 59, 0.5)' },
                         ticks: {
-                            color: '#64748b',
-                            font: { size: 8 },
+                            color: '#94a3b8',
+                            font: { size: 10 },
                             callback: (val) => `${val}%`,
                         },
                         title: {
@@ -1545,7 +1596,7 @@
                         grid: { drawOnChartArea: false },
                         ticks: {
                             color: '#a855f7',
-                            font: { size: 8 },
+                            font: { size: 10 },
                             callback: (val) => `${val}`,
                         },
                         title: {
@@ -1601,9 +1652,9 @@
         // SoH percentage text + color
         const sohEl = document.getElementById('sohPctText');
         sohEl.textContent = `${(soh * 100).toFixed(1)}% SoH`;
-        if (soh < 0.75) sohEl.className = 'text-terminal-red text-xs font-bold';
-        else if (soh < 0.85) sohEl.className = 'text-terminal-amber text-xs font-bold';
-        else sohEl.className = 'text-terminal-green text-xs font-bold';
+        if (soh < 0.75) sohEl.className = 'text-terminal-red text-sm font-bold';
+        else if (soh < 0.85) sohEl.className = 'text-terminal-amber text-sm font-bold';
+        else sohEl.className = 'text-terminal-green text-sm font-bold';
 
         // Cycle count
         document.getElementById('cycleCount').textContent =
@@ -1750,7 +1801,7 @@
             const labelColor = ic.is_congested ? 'text-terminal-red font-bold' : 'text-white';
 
             html += `
-                <div class="text-xs">
+                <div class="text-sm">
                     <div class="flex justify-between mb-1">
                         <span class="${labelColor}">${direction}</span>
                         <span class="${labelColor}">${gwFlow}/${maxGw} GW ${ic.is_congested ? '(MAX!)' : ''}</span>
@@ -1948,9 +1999,9 @@
 
             sparkHtml += `
                 <div class="flex items-center gap-2">
-                    <span class="text-xs ${zone === 'DE' ? 'text-terminal-blue font-bold' : 'text-terminal-muted'} w-6">${zone}</span>
+                    <span class="text-sm ${zone === 'DE' ? 'text-terminal-blue font-bold' : 'text-terminal-muted'} w-6">${zone}</span>
                     <div class="flex gap-1">${bars}</div>
-                    <span class="text-xs text-terminal-muted ml-auto">${zoneForecast[zoneForecast.length-1].wind} m/s</span>
+                    <span class="text-sm text-terminal-muted ml-auto">${zoneForecast[zoneForecast.length-1].wind} m/s</span>
                 </div>
             `;
         }
@@ -2147,7 +2198,7 @@
             const statusColor = ev.status === 'BREAKING' ? 'text-terminal-red font-bold' : 'text-terminal-muted';
             const statusTag = ev.status === 'BREAKING' ? 'BREAKING' : 'ENDED';
             const timeStr = `D${ev.day} ${String(ev.tick).padStart(2, '0')}:00`;
-            return `<span class="${statusColor}">[${statusTag}]</span> <span class="text-white">${icon} ${ev.headline}</span> <span class="text-terminal-muted text-xs">${timeStr}</span>`;
+            return `<span class="${statusColor}">[${statusTag}]</span> <span class="text-white">${icon} ${ev.headline}</span> <span class="text-terminal-muted text-sm">${timeStr}</span>`;
         });
 
         el.innerHTML = items.join(' <span class="text-terminal-border mx-2">|</span> ');
@@ -2184,7 +2235,7 @@
                 <span class="storm-active">${icon}</span>
                 <span class="font-medium">${ev.headline.substring(0, 50)}${ev.headline.length > 50 ? '...' : ''}</span>
                 <span class="text-terminal-muted">${icNote}${zoneNote}</span>
-                <span class="bg-terminal-bg px-1.5 py-0.5 rounded text-xs">${hoursLeft}h left</span>
+                <span class="bg-terminal-bg px-1.5 py-0.5 rounded text-sm">${hoursLeft}h left</span>
             </div>`;
         });
 
@@ -2235,11 +2286,11 @@
         const sellBtn = document.getElementById('daBidSell');
 
         if (type === 'BUY') {
-            buyBtn.className = 'text-xs py-1.5 rounded border border-terminal-green/40 text-terminal-green bg-terminal-green/10 font-medium';
-            sellBtn.className = 'text-xs py-1.5 rounded border border-terminal-border text-terminal-muted';
+            buyBtn.className = 'text-sm py-1.5 rounded border border-terminal-green/40 text-terminal-green bg-terminal-green/10 font-medium';
+            sellBtn.className = 'text-sm py-1.5 rounded border border-terminal-border text-terminal-muted';
         } else {
-            buyBtn.className = 'text-xs py-1.5 rounded border border-terminal-border text-terminal-muted';
-            sellBtn.className = 'text-xs py-1.5 rounded border border-terminal-red/40 text-terminal-red bg-terminal-red/10 font-medium';
+            buyBtn.className = 'text-sm py-1.5 rounded border border-terminal-border text-terminal-muted';
+            sellBtn.className = 'text-sm py-1.5 rounded border border-terminal-red/40 text-terminal-red bg-terminal-red/10 font-medium';
         }
     }
 
@@ -2266,7 +2317,7 @@
 
         const feedbackEl = document.getElementById('daFeedback');
         feedbackEl.textContent = `Submitting ${daBidType} bid...`;
-        feedbackEl.className = 'text-xs text-center mt-1.5 h-4 text-terminal-amber';
+        feedbackEl.className = 'text-sm text-center mt-1.5 h-4 text-terminal-amber';
     }
 
     /**
@@ -2280,11 +2331,11 @@
 
         if (daMarket.cleared_today) {
             statusEl.textContent = `Cleared @ €${(daMarket.clearing_price || 0).toFixed(1)}`;
-            statusEl.className = 'text-xs text-terminal-green font-bold';
+            statusEl.className = 'text-sm text-terminal-green font-bold';
         } else {
             const pendingCount = daMarket.num_pending_bids || 0;
             statusEl.textContent = `Gate open — ${pendingCount} bid${pendingCount !== 1 ? 's' : ''} (clears ${String(clearingHour).padStart(2,'0')}:00)`;
-            statusEl.className = 'text-xs text-terminal-amber';
+            statusEl.className = 'text-sm text-terminal-amber';
         }
 
         // Show last clearing results
@@ -2329,7 +2380,7 @@
         // Visual feedback
         const feedbackEl = document.getElementById('tradeFeedback');
         feedbackEl.textContent = `${action} ${mw.toLocaleString()} MW — executing...`;
-        feedbackEl.className = 'text-xs text-center mt-2 h-4 text-terminal-amber';
+        feedbackEl.className = 'text-sm text-center mt-2 h-4 text-terminal-amber';
     }
 
     function handleTradeResult(data) {
@@ -2372,7 +2423,7 @@
         }
 
         feedbackEl.innerHTML = `${action} ${mw.toLocaleString()} MW @ €${price}/MWh = ${totalStr}${effInfo}`;
-        feedbackEl.className = `text-xs text-center mt-2 h-4 ${color}`;
+        feedbackEl.className = `text-sm text-center mt-2 h-4 ${color}`;
 
         // Toast notification
         showToast(`${action} ${mw.toLocaleString()} MW @ €${price.toFixed(2)}/MWh`, action === 'BUY' ? 'success' : 'info');
@@ -2397,7 +2448,7 @@
             info: 'border-terminal-blue bg-terminal-blue/10 text-terminal-blue',
         };
 
-        toast.className = `toast border rounded px-4 py-2 text-xs font-medium ${colors[type] || colors.info}`;
+        toast.className = `toast border rounded px-4 py-2 text-sm font-medium ${colors[type] || colors.info}`;
         toast.textContent = message;
         container.appendChild(toast);
 
