@@ -11,7 +11,9 @@
 > European spot market — learning about market coupling, interconnector
 > congestion, renewable intermittency, the duck curve, and forecast risk.
 
-![Battery Trader Sim — Bloomberg-terminal-style UI](https://via.placeholder.com/900x500/0a0e17/00ff88?text=Battery+Trader+Sim)
+![Battery Trader Sim — dark-theme trading UI](docs/screenshot.png)
+
+> _Screenshot above is a placeholder path — drop a real PNG at `docs/screenshot.png` after running the app locally._
 
 ---
 
