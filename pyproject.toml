@@ -35,7 +35,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "fastapi>=0.115",
+    "fastapi>=0.136.1",
     "uvicorn[standard]>=0.34",
     "aiosqlite>=0.21",
 ]
