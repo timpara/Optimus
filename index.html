@@ -902,9 +902,11 @@
 
     function connectWebSocket() {
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const url = `${protocol}//${location.host}/ws?token=${appState.token}`;
+        const url = `${protocol}//${location.host}/ws`;
 
-        appState.ws = new WebSocket(url);
+        // Pass the bearer token via the WebSocket subprotocol so it stays out
+        // of the URL (and therefore out of access logs and proxy logs).
+        appState.ws = new WebSocket(url, [`bearer.${appState.token}`]);
 
         appState.ws.onopen = () => {
             document.getElementById('wsStatus').className = 'w-2 h-2 rounded-full bg-terminal-green';

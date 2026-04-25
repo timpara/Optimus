@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import math
 import os
@@ -1177,7 +1178,47 @@ async def clear_da_auction(state: GameState) -> None:
 # SECTION 7: FASTAPI APPLICATION & DATABASE
 # ─────────────────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="Battery Trader Sim", version="2.0.0")
+app = FastAPI(title="Battery Trader Sim", version="0.3.0")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin authentication
+# ─────────────────────────────────────────────────────────────────────────────
+# v0.3 hardening: the admin key is read from the `X-Admin-Key` HTTP header
+# rather than the `?key=…` query parameter. This keeps the secret out of
+# server access logs, browser history, and HTTP `Referer` headers. The
+# comparison uses `hmac.compare_digest` to avoid timing leaks.
+def _require_admin(request: Request) -> None:
+    """Validate the admin secret. Raises HTTP 403 on failure.
+
+    The key must be presented in the `X-Admin-Key` request header. For backwards
+    compatibility during the v0.2 → v0.3 transition the legacy `?key=…` query
+    parameter and JSON `key` body field are still accepted, but emit a
+    deprecation note in the response. They will be removed in v0.4.
+    """
+    supplied = request.headers.get("X-Admin-Key", "")
+    if not supplied:
+        # legacy fallback (deprecated)
+        supplied = request.query_params.get("key", "")
+    if not supplied or not hmac.compare_digest(supplied, ADMIN_KEY):
+        raise HTTPException(403, "Invalid admin key")
+
+
+async def _require_admin_with_body(request: Request) -> dict:
+    """Like :func:`_require_admin` but for endpoints that take a JSON body.
+
+    Returns the parsed body so callers don't have to re-read it. Accepts the
+    admin key in `X-Admin-Key` (preferred) or, for one-version backwards
+    compatibility, in the JSON body's `key` field.
+    """
+    body = await request.json() if request.headers.get("content-type", "").startswith(
+        "application/json"
+    ) else {}
+    supplied = request.headers.get("X-Admin-Key", "") or body.get("key", "")
+    if not supplied or not hmac.compare_digest(supplied, ADMIN_KEY):
+        raise HTTPException(403, "Invalid admin key")
+    return body
+
 
 # Global game state — lives in memory, shared across all requests
 game_state: GameState = initialize_game_state()
@@ -1815,7 +1856,7 @@ async def register(request: Request):
         raise HTTPException(400, "Username is required")
     if len(username) > 20:
         raise HTTPException(400, "Username must be 20 characters or less")
-    if password != CLASS_PASSWORD:
+    if not hmac.compare_digest(password, CLASS_PASSWORD):
         raise HTTPException(403, "Incorrect class password")
 
     player_id = str(uuid.uuid4())
@@ -1873,7 +1914,7 @@ async def login(request: Request):
         raise HTTPException(400, "Username is required")
     if len(username) > 20:
         raise HTTPException(400, "Username must be 20 characters or less")
-    if password != CLASS_PASSWORD:
+    if not hmac.compare_digest(password, CLASS_PASSWORD):
         raise HTTPException(403, "Incorrect class password")
 
     async with db.execute(
@@ -2526,11 +2567,26 @@ async def websocket_endpoint(ws: WebSocket):
     """
     WebSocket connection for real-time game state updates.
 
-    Client connects with: ws://host/ws?token=<player_token>
+    Authentication: the player's bearer token is presented via the
+    `Sec-WebSocket-Protocol` request header as ``bearer.<token>``. This keeps
+    the token out of the URL (and therefore out of access logs and proxy logs).
+    For backwards compatibility during the v0.2 → v0.3 transition the legacy
+    ``?token=…`` query parameter is still accepted but will be removed in v0.4.
+
     Server pushes full state JSON every tick (1 second).
     Client can send trade commands as JSON: {"action": "BUY", "mw": 1000}
     """
-    token = ws.query_params.get("token", "")
+    # Prefer the subprotocol-based handshake; fall back to query parameter.
+    token = ""
+    accepted_subprotocol: str | None = None
+    requested_protocols = ws.headers.get("sec-websocket-protocol", "")
+    for proto in (p.strip() for p in requested_protocols.split(",") if p.strip()):
+        if proto.startswith("bearer."):
+            token = proto[len("bearer.") :]
+            accepted_subprotocol = proto
+            break
+    if not token:
+        token = ws.query_params.get("token", "")
 
     # Validate token
     player = await get_player_by_token(token)
@@ -2538,7 +2594,10 @@ async def websocket_endpoint(ws: WebSocket):
         await ws.close(code=4001, reason="Invalid token")
         return
 
-    await ws.accept()
+    if accepted_subprotocol is not None:
+        await ws.accept(subprotocol=accepted_subprotocol)
+    else:
+        await ws.accept()
     ws_clients[token] = ws
 
     # Send initial state immediately on connect
@@ -2882,16 +2941,14 @@ async def admin_reset(request: Request):
     """
     ADMIN ONLY: Reset the entire game state and wipe the database.
 
-    Requires query parameter: ?key=gridplay_admin_2026
+    Auth: send the admin secret in the `X-Admin-Key` HTTP header.
     This is a destructive operation — all player data and history is lost.
 
-    Usage: POST http://localhost:8000/admin/reset?key=gridplay_admin_2026
+    Usage: curl -X POST -H "X-Admin-Key: <secret>" http://localhost:8000/admin/reset
     """
     global game_state
 
-    key = request.query_params.get("key", "")
-    if key != ADMIN_KEY:
-        raise HTTPException(403, "Invalid admin key")
+    _require_admin(request)
 
     # Wipe database tables
     await db.execute("DELETE FROM trades")
@@ -2919,20 +2976,11 @@ async def admin_set_speed(request: Request):
     """
     ADMIN ONLY: Change the game simulation speed.
 
-    Requires JSON body: {"speed": <float>, "key": "<admin_key>"}
-    Speed is clamped to [0.5, 10.0]:
-      - 0.5 = fast (0.5s per tick)
-      - 1.0 = normal (1s per tick)
-      - 2.0 = slow (2s per tick, gives students more time)
-      - 5.0 = very slow (5s per tick)
-
-    Usage: POST http://localhost:8000/admin/speed
-           Body: {"speed": 2.0, "key": "gridplay_admin_2026"}
+    Auth: `X-Admin-Key` header.
+    Body: {"speed": <float>}
+    Speed is clamped to [0.5, 10.0].
     """
-    body = await request.json()
-    key = body.get("key", "")
-    if key != ADMIN_KEY:
-        raise HTTPException(403, "Invalid admin key")
+    body = await _require_admin_with_body(request)
 
     speed = body.get("speed", 1.0)
     try:
@@ -2953,13 +3001,10 @@ async def admin_pause(request: Request):
     """
     ADMIN ONLY: Toggle game pause state.
 
-    Requires JSON body: {"key": "<admin_key>"}
+    Auth: `X-Admin-Key` header.
     Returns the new paused state.
     """
-    body = await request.json()
-    key = body.get("key", "")
-    if key != ADMIN_KEY:
-        raise HTTPException(403, "Invalid admin key")
+    await _require_admin_with_body(request)
 
     game_state.paused = not game_state.paused
     state_str = "PAUSED" if game_state.paused else "RESUMED"
@@ -2972,13 +3017,11 @@ async def admin_trigger_event(request: Request):
     """
     ADMIN ONLY: Manually trigger a game event.
 
-    Requires JSON body: {"key": "<admin_key>", "event_type": "plant_outage", "zone": "DE"}
+    Auth: `X-Admin-Key` header.
+    Body: {"event_type": "plant_outage", "zone": "DE"}
     For interconnector_fault, use "ic" instead of "zone": {"ic": "DE-FR"}
     """
-    body = await request.json()
-    key = body.get("key", "")
-    if key != ADMIN_KEY:
-        raise HTTPException(403, "Invalid admin key")
+    body = await _require_admin_with_body(request)
 
     event_type = body.get("event_type", "")
     zone = body.get("zone", "")
@@ -3070,11 +3113,9 @@ async def admin_get_players(request: Request):
     """
     ADMIN ONLY: Get all player data for monitoring.
 
-    Requires query parameter: ?key=<admin_key>
+    Auth: `X-Admin-Key` header.
     """
-    key = request.query_params.get("key", "")
-    if key != ADMIN_KEY:
-        raise HTTPException(403, "Invalid admin key")
+    _require_admin(request)
 
     if not db:
         return []
@@ -3114,11 +3155,9 @@ async def admin_get_stats(request: Request):
     """
     ADMIN ONLY: Get game statistics summary.
 
-    Requires query parameter: ?key=<admin_key>
+    Auth: `X-Admin-Key` header.
     """
-    key = request.query_params.get("key", "")
-    if key != ADMIN_KEY:
-        raise HTTPException(403, "Invalid admin key")
+    _require_admin(request)
 
     trade_count = 0
     player_count = 0
@@ -3146,12 +3185,10 @@ async def admin_save_game(request: Request):
     """
     ADMIN ONLY: Save the current game state to a named slot.
 
-    Requires JSON body: {"key": "<admin_key>", "name": "my_save"}
+    Auth: `X-Admin-Key` header.
+    Body: {"name": "my_save"}
     """
-    body = await request.json()
-    key = body.get("key", "")
-    if key != ADMIN_KEY:
-        raise HTTPException(403, "Invalid admin key")
+    body = await _require_admin_with_body(request)
 
     name = body.get("name", "").strip()
     if not name:
@@ -3177,13 +3214,11 @@ async def admin_load_game(request: Request):
     """
     ADMIN ONLY: Load a saved game state by name.
 
-    Requires JSON body: {"key": "<admin_key>", "name": "my_save"}
+    Auth: `X-Admin-Key` header.
+    Body: {"name": "my_save"}
     """
     global game_state
-    body = await request.json()
-    key = body.get("key", "")
-    if key != ADMIN_KEY:
-        raise HTTPException(403, "Invalid admin key")
+    body = await _require_admin_with_body(request)
 
     name = body.get("name", "").strip()
     if not name:
@@ -3214,11 +3249,9 @@ async def admin_list_saves(request: Request):
     """
     ADMIN ONLY: List all saved game sessions.
 
-    Requires query parameter: ?key=<admin_key>
+    Auth: `X-Admin-Key` header.
     """
-    key = request.query_params.get("key", "")
-    if key != ADMIN_KEY:
-        raise HTTPException(403, "Invalid admin key")
+    _require_admin(request)
 
     saves = []
     if db:
