@@ -1180,6 +1180,12 @@ async def clear_da_auction(state: GameState) -> None:
 
 app = FastAPI(title="Battery Trader Sim", version="0.3.0")
 
+# Public legal pages — Impressum (§ 5 DDG) and Datenschutzerklärung (DSGVO).
+# These must be reachable without authentication.
+from gridplay.legal import router as legal_router  # noqa: E402
+
+app.include_router(legal_router)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Admin authentication
