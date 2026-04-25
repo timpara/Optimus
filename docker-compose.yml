@@ -1,24 +1,24 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Optimus — Battery Trader Sim
+# gridplay — Battery Trader Sim
 # docker compose up -d
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
-  optimus:
+  gridplay:
     build:
       context: .
       args:
-        VERSION: ${OPTIMUS_VERSION:-dev}
+        VERSION: ${GRIDPLAY_VERSION:-dev}
     # Or pull the public image instead of building locally:
-    # image: ghcr.io/timpara/optimus:latest
-    container_name: optimus
+    # image: ghcr.io/timpara/gridplay:latest
+    container_name: gridplay
     restart: unless-stopped
     ports:
       - "8000:8000"
     volumes:
       # Persist the SQLite database across container restarts.
       # To wipe and start fresh:  docker compose down -v
-      - optimus-data:/data
+      - gridplay-data:/data
 
     # ── Required secrets ──
     # The server refuses to start without these. Set them in a `.env` file
@@ -41,4 +41,4 @@ services:
       start_period: 10s
 
 volumes:
-  optimus-data:
+  gridplay-data:

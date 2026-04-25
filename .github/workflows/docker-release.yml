@@ -17,7 +17,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/optimus
+  IMAGE_NAME: ${{ github.repository_owner }}/gridplay
 
 jobs:
   build-and-push:
