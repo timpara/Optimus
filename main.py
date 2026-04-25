@@ -1761,7 +1761,7 @@ async def startup():
     print("=" * 60)
     print("  BATTERY TRADER SIM — Server Started")
     print("  Open http://localhost:8000 to play")
-    print("  Class password: (set via OPTIMUS_CLASS_PASSWORD, not logged)")
+    print("  Class password: (set via GRIDPLAY_CLASS_PASSWORD, not logged)")
     print("=" * 60)
 
 
@@ -2882,10 +2882,10 @@ async def admin_reset(request: Request):
     """
     ADMIN ONLY: Reset the entire game state and wipe the database.
 
-    Requires query parameter: ?key=optimus_admin_2026
+    Requires query parameter: ?key=gridplay_admin_2026
     This is a destructive operation — all player data and history is lost.
 
-    Usage: POST http://localhost:8000/admin/reset?key=optimus_admin_2026
+    Usage: POST http://localhost:8000/admin/reset?key=gridplay_admin_2026
     """
     global game_state
 
@@ -2927,7 +2927,7 @@ async def admin_set_speed(request: Request):
       - 5.0 = very slow (5s per tick)
 
     Usage: POST http://localhost:8000/admin/speed
-           Body: {"speed": 2.0, "key": "optimus_admin_2026"}
+           Body: {"speed": 2.0, "key": "gridplay_admin_2026"}
     """
     body = await request.json()
     key = body.get("key", "")

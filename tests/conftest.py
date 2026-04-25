@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the Optimus test suite."""
+"""Shared pytest fixtures for the gridplay test suite."""
 
 from __future__ import annotations
 
@@ -11,9 +11,9 @@ import pytest
 @pytest.fixture(autouse=True)
 def _set_required_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ensure required environment variables are set before importing main."""
-    monkeypatch.setenv("OPTIMUS_CLASS_PASSWORD", "test-class-pw")
-    monkeypatch.setenv("OPTIMUS_ADMIN_KEY", "test-admin-key")
-    monkeypatch.setenv("OPTIMUS_DB_PATH", ":memory:")
+    monkeypatch.setenv("GRIDPLAY_CLASS_PASSWORD", "test-class-pw")
+    monkeypatch.setenv("GRIDPLAY_ADMIN_KEY", "test-admin-key")
+    monkeypatch.setenv("GRIDPLAY_DB_PATH", ":memory:")
 
 
 @pytest.fixture(autouse=True)

@@ -2,7 +2,7 @@
 
 This module centralises everything that can be tuned at deployment time. It
 is imported for its side effect of validating the two required secrets
-(``OPTIMUS_CLASS_PASSWORD`` and ``OPTIMUS_ADMIN_KEY``) — if either is missing
+(``GRIDPLAY_CLASS_PASSWORD`` and ``GRIDPLAY_ADMIN_KEY``) — if either is missing
 or empty, import fails with a clear :class:`RuntimeError` and the server never
 starts. This prevents accidentally exposing a public instance that is still
 using shipped defaults.
@@ -59,19 +59,19 @@ def require_env(name: str) -> str:
 
 # ── Secrets (required) ────────────────────────────────────────────────────
 # Class password — every student uses this to join.
-CLASS_PASSWORD: str = require_env("OPTIMUS_CLASS_PASSWORD")
+CLASS_PASSWORD: str = require_env("GRIDPLAY_CLASS_PASSWORD")
 
 # Admin secret for /admin/* endpoints.
-ADMIN_KEY: str = require_env("OPTIMUS_ADMIN_KEY")
+ADMIN_KEY: str = require_env("GRIDPLAY_ADMIN_KEY")
 
 # ── Battery specs ─────────────────────────────────────────────────────────
-BATTERY_MAX_MWH: int = int(os.environ.get("OPTIMUS_BATTERY_MAX_MWH", "50000"))
+BATTERY_MAX_MWH: int = int(os.environ.get("GRIDPLAY_BATTERY_MAX_MWH", "50000"))
 """Total energy capacity — 50 GWh."""
 
-BATTERY_MAX_MW: int = int(os.environ.get("OPTIMUS_BATTERY_MAX_MW", "10000"))
+BATTERY_MAX_MW: int = int(os.environ.get("GRIDPLAY_BATTERY_MAX_MW", "10000"))
 """Max charge/discharge rate per hour — 10 GW."""
 
-BATTERY_START_MWH: int = int(os.environ.get("OPTIMUS_BATTERY_START_MWH", "25000"))
+BATTERY_START_MWH: int = int(os.environ.get("GRIDPLAY_BATTERY_START_MWH", "25000"))
 """Starting SoC — 50%."""
 
 # ── Battery physics (realistic constraints) ───────────────────────────────
@@ -94,25 +94,25 @@ BATTERY_START_SOH: float = 1.0
 BATTERY_EFF_DEGRADATION_FACTOR: float = 0.10
 
 # ── Economy ───────────────────────────────────────────────────────────────
-STARTING_CASH: float = float(os.environ.get("OPTIMUS_STARTING_CASH", "0.0"))
+STARTING_CASH: float = float(os.environ.get("GRIDPLAY_STARTING_CASH", "0.0"))
 
 # Reference price for mark-to-market PnL. Must match ZONES["DE"]["base_price"]
 # so every player's initial MTM PnL is exactly 0.
-STARTING_REF_PRICE: float = float(os.environ.get("OPTIMUS_STARTING_REF_PRICE", "45.0"))
+STARTING_REF_PRICE: float = float(os.environ.get("GRIDPLAY_STARTING_REF_PRICE", "45.0"))
 
 # ── Tick timing ───────────────────────────────────────────────────────────
-TICK_INTERVAL_SECONDS: float = float(os.environ.get("OPTIMUS_TICK_INTERVAL", "1.0"))
+TICK_INTERVAL_SECONDS: float = float(os.environ.get("GRIDPLAY_TICK_INTERVAL", "1.0"))
 
 # ── Rate limiting ─────────────────────────────────────────────────────────
-TRADE_RATE_LIMIT: int = int(os.environ.get("OPTIMUS_TRADE_RATE_LIMIT", "2"))
-TRADE_RATE_WINDOW: float = float(os.environ.get("OPTIMUS_TRADE_RATE_WINDOW", "1.0"))
+TRADE_RATE_LIMIT: int = int(os.environ.get("GRIDPLAY_TRADE_RATE_LIMIT", "2"))
+TRADE_RATE_WINDOW: float = float(os.environ.get("GRIDPLAY_TRADE_RATE_WINDOW", "1.0"))
 
 # ── Database ──────────────────────────────────────────────────────────────
 # Anchored to the repository root so the same DB is used regardless of the
 # working directory when starting the server.
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 DB_PATH: str = os.environ.get(
-    "OPTIMUS_DB_PATH",
+    "GRIDPLAY_DB_PATH",
     str(_REPO_ROOT / "battery_trader.db"),
 )
 
