@@ -1068,13 +1068,18 @@
             minZoom: 4,
             maxZoom: 7,
             zoomControl: true,
-            attributionControl: false,
+            attributionControl: true,
         });
 
-        // Use a dark-themed tile layer (CartoDB dark matter)
+        // Use a dark-themed tile layer (CartoDB dark matter).
+        // OpenStreetMap (ODbL) and CartoDB attribution is required by their
+        // respective licenses and must remain visible.
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             subdomains: 'abcd',
             maxZoom: 19,
+            attribution:
+                '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors ' +
+                '&copy; <a href="https://carto.com/attributions">CARTO</a>',
         }).addTo(map);
 
         // Disable the dark filter since we're using dark tiles directly
