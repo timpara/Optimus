@@ -1,8 +1,8 @@
-"""Tests for the optimus.constants data tables."""
+"""Tests for the gridplay.constants data tables."""
 
 from __future__ import annotations
 
-from optimus import constants
+from gridplay import constants
 
 
 def test_zones_complete() -> None:

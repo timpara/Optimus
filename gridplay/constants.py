@@ -1,7 +1,7 @@
 """Static configuration tables that define the simulated European spot market.
 
 These are pure data — no side effects at import time. Constants here are
-intentionally read-only; runtime overrides belong in :mod:`optimus.config`.
+intentionally read-only; runtime overrides belong in :mod:`gridplay.config`.
 
 The values are simplified but directionally correct: France really is
 nuclear-dominated (stable prices), Denmark really is wind-dominated (volatile

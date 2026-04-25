@@ -33,15 +33,15 @@ from fastapi.responses import HTMLResponse, JSONResponse
 # ─────────────────────────────────────────────────────────────────────────────
 # SECTION 1: CONSTANTS & CONFIGURATION
 # ─────────────────────────────────────────────────────────────────────────────
-# All configuration has moved into the `optimus` package for clarity and
+# All configuration has moved into the `gridplay` package for clarity and
 # testability; the names are re-exported here to keep the rest of this
 # module unchanged during the ongoing refactor.
 #
-#   optimus.config    — env-backed runtime settings (fails fast on missing secrets)
-#   optimus.constants — pure data: market zones, interconnectors, events, duck curve
+#   gridplay.config    — env-backed runtime settings (fails fast on missing secrets)
+#   gridplay.constants — pure data: market zones, interconnectors, events, duck curve
 # ─────────────────────────────────────────────────────────────────────────────
 
-from optimus.config import (  # noqa: E402  (re-exports preserve legacy import paths)
+from gridplay.config import (  # noqa: E402  (re-exports preserve legacy import paths)
     ADMIN_KEY,
     BATTERY_CYCLE_LIFE,
     BATTERY_EFF_DEGRADATION_FACTOR,
@@ -63,7 +63,7 @@ from optimus.config import (  # noqa: E402  (re-exports preserve legacy import p
     TRADE_RATE_LIMIT,
     TRADE_RATE_WINDOW,
 )
-from optimus.constants import (
+from gridplay.constants import (
     CARBON_INTENSITY,
     DUCK_CURVE,
     EVENT_TEMPLATES,

@@ -3,8 +3,8 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "optimus"
-version = "2.0.0"
+name = "gridplay"
+version = "0.3.0"
 description = "Battery Trader Sim — multiplayer energy trading educational game"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -38,6 +38,7 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
     "aiosqlite>=0.21",
+    "markdown>=3.5",
 ]
 
 [project.optional-dependencies]
@@ -51,14 +52,14 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/timpara/Optimus"
-Repository = "https://github.com/timpara/Optimus"
-Issues = "https://github.com/timpara/Optimus/issues"
-Changelog = "https://github.com/timpara/Optimus/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/timpara/gridplay"
+Repository = "https://github.com/timpara/gridplay"
+Issues = "https://github.com/timpara/gridplay/issues"
+Changelog = "https://github.com/timpara/gridplay/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 py-modules = ["main"]
-packages = ["optimus"]
+packages = ["gridplay"]
 
 # ──────────────────────────────────────────────────────────────────────────
 # Ruff — lint + format (replaces black, flake8, isort)
