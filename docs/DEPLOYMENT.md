@@ -5,15 +5,15 @@
 The fastest path for most users.
 
 ```bash
-git clone https://github.com/timpara/Optimus.git
-cd Optimus
+git clone https://github.com/timpara/gridplay.git
+cd gridplay
 cp .env.example .env
-# edit .env and set OPTIMUS_CLASS_PASSWORD + OPTIMUS_ADMIN_KEY
+# edit .env and set GRIDPLAY_CLASS_PASSWORD + GRIDPLAY_ADMIN_KEY
 docker compose up -d
 ```
 
-Optimus will be on <http://localhost:8000>. The SQLite DB lives in the
-`optimus-data` named volume — your classroom state survives container
+gridplay will be on <http://localhost:8000>. The SQLite DB lives in the
+`gridplay-data` named volume — your classroom state survives container
 restarts.
 
 To wipe everything and start fresh:
@@ -25,13 +25,13 @@ docker compose down -v
 ## Single-image deployment
 
 ```bash
-docker run -d --name optimus \
+docker run -d --name gridplay \
   -p 8000:8000 \
-  -e OPTIMUS_CLASS_PASSWORD="change-me" \
-  -e OPTIMUS_ADMIN_KEY="also-change-me" \
-  -v optimus-data:/data \
+  -e GRIDPLAY_CLASS_PASSWORD="change-me" \
+  -e GRIDPLAY_ADMIN_KEY="also-change-me" \
+  -v gridplay-data:/data \
   --restart unless-stopped \
-  ghcr.io/timpara/optimus:latest
+  ghcr.io/timpara/gridplay:latest
 ```
 
 Tags:
@@ -59,5 +59,5 @@ See [`.env.example`](../.env.example) for the canonical list.
 
 ## Backups
 
-Back up `battery_trader.db` (volume: `optimus-data`, path: `/data`) if you
+Back up `battery_trader.db` (volume: `gridplay-data`, path: `/data`) if you
 want to preserve per-player state across redeployments.

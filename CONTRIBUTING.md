@@ -1,6 +1,6 @@
-# Contributing to Optimus
+# Contributing to gridplay
 
-First off — thanks for considering a contribution! Optimus is a classroom
+First off — thanks for considering a contribution! gridplay is a classroom
 teaching tool, and we love improvements that make the simulation more
 realistic, the UI more intuitive, or the code easier to hack on.
 
@@ -21,18 +21,18 @@ realistic, the UI more intuitive, or the code easier to hack on.
 - **Write tests** — `tests/` coverage is always welcome.
 - **Discuss** design ideas in [Discussions][discussions] before large changes.
 
-[new-bug]: https://github.com/timpara/Optimus/issues/new?template=bug_report.yml
-[new-feature]: https://github.com/timpara/Optimus/issues/new?template=feature_request.yml
-[gfi]: https://github.com/timpara/Optimus/labels/good%20first%20issue
-[discussions]: https://github.com/timpara/Optimus/discussions
+[new-bug]: https://github.com/timpara/gridplay/issues/new?template=bug_report.yml
+[new-feature]: https://github.com/timpara/gridplay/issues/new?template=feature_request.yml
+[gfi]: https://github.com/timpara/gridplay/labels/good%20first%20issue
+[discussions]: https://github.com/timpara/gridplay/discussions
 
 ## Development setup
 
 Requires **Python 3.12+**.
 
 ```bash
-git clone https://github.com/timpara/Optimus.git
-cd Optimus
+git clone https://github.com/timpara/gridplay.git
+cd gridplay
 python -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
 ```
@@ -40,8 +40,8 @@ pip install -e '.[dev]'
 Run the server in dev mode with auto-reload:
 
 ```bash
-export OPTIMUS_CLASS_PASSWORD=trade2026
-export OPTIMUS_ADMIN_KEY=dev-admin
+export GRIDPLAY_CLASS_PASSWORD=trade2026
+export GRIDPLAY_ADMIN_KEY=dev-admin
 uvicorn main:app --reload --port 8000
 ```
 
@@ -61,7 +61,7 @@ locally before opening a PR.
 
 ```bash
 pytest                     # run the test suite
-pytest --cov=optimus       # with coverage
+pytest --cov=gridplay       # with coverage
 ruff check .               # lint
 ruff format --check .      # format check (use `ruff format .` to apply)
 mypy .                     # static type check
@@ -77,7 +77,7 @@ pre-commit install
 ## Project layout
 
 ```
-Optimus/
+gridplay/
 ├── main.py                # FastAPI app + background tick loop (entry point)
 ├── index.html             # Single-page frontend (served at /)
 ├── pyproject.toml         # Package metadata, deps, tool configs
@@ -169,4 +169,4 @@ Before opening a PR, please confirm:
    `CHANGELOG.md` and version bump.
 3. Merging the release PR creates a git tag + GitHub Release.
 4. The `docker-release` workflow publishes the image to
-   `ghcr.io/timpara/optimus` (public).
+   `ghcr.io/timpara/gridplay` (public).

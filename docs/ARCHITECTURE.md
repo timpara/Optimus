@@ -1,6 +1,6 @@
 # Architecture
 
-This document explains how the Optimus server is put together so contributors
+This document explains how the gridplay server is put together so contributors
 can navigate the code with confidence.
 
 ## High-level components
@@ -29,7 +29,7 @@ can navigate the code with confidence.
 ```
 
 Everything runs in a single process. The background task ticks once per
-`OPTIMUS_TICK_INTERVAL` seconds; after each tick the full `GameState` is
+`GRIDPLAY_TICK_INTERVAL` seconds; after each tick the full `GameState` is
 broadcast to every connected WebSocket client.
 
 ## Tick loop

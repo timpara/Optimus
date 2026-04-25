@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a defect in Optimus
+description: Report a defect in gridplay
 title: "bug: "
 labels: ["bug", "triage"]
 body:
@@ -11,15 +11,15 @@ body:
   - type: input
     id: version
     attributes:
-      label: Optimus version
+      label: gridplay version
       description: Output of `git describe --tags` or the Docker image tag you ran.
-      placeholder: "v0.1.1 or ghcr.io/timpara/optimus:latest"
+      placeholder: "v0.1.1 or ghcr.io/timpara/gridplay:latest"
     validations:
       required: true
   - type: dropdown
     id: environment
     attributes:
-      label: How are you running Optimus?
+      label: How are you running gridplay?
       options:
         - Docker / docker compose
         - Local Python (uvicorn)

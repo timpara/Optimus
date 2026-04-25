@@ -16,7 +16,7 @@ discussions, or pull requests.**
 
 Instead, report them privately via GitHub's Security Advisories:
 
-1. Go to <https://github.com/timpara/Optimus/security/advisories/new>.
+1. Go to <https://github.com/timpara/gridplay/security/advisories/new>.
 2. Fill out the form with as much detail as you can: affected versions,
    reproduction steps, potential impact, and any suggested fix.
 
@@ -28,7 +28,7 @@ fix and coordinated disclosure within **30 days** for high-severity issues.
 In scope:
 
 - The FastAPI application (auth, trading endpoints, WebSocket, admin routes).
-- The Docker image published to `ghcr.io/timpara/optimus`.
+- The Docker image published to `ghcr.io/timpara/gridplay`.
 - The build, CI, and release workflows in `.github/workflows/`.
 
 Out of scope (but still appreciated as regular issues):
@@ -40,10 +40,10 @@ Out of scope (but still appreciated as regular issues):
 
 ## Operator guidance
 
-Optimus is built for classroom use on trusted networks. If you expose an
+gridplay is built for classroom use on trusted networks. If you expose an
 instance to the public internet, you **must**:
 
-- Set a strong, unique `OPTIMUS_CLASS_PASSWORD` and `OPTIMUS_ADMIN_KEY`.
+- Set a strong, unique `GRIDPLAY_CLASS_PASSWORD` and `GRIDPLAY_ADMIN_KEY`.
 - Terminate TLS in front of the app (reverse proxy with WSS).
 - Consider rate-limiting at the ingress layer.
 - Back up `/data/battery_trader.db` if per-player history matters.

@@ -1,10 +1,10 @@
-# Optimus — Battery Trader Sim
+# gridplay — Battery Trader Sim
 
-[![CI](https://github.com/timpara/Optimus/actions/workflows/ci.yml/badge.svg)](https://github.com/timpara/Optimus/actions/workflows/ci.yml)
-[![Docker](https://github.com/timpara/Optimus/actions/workflows/docker-release.yml/badge.svg)](https://github.com/timpara/Optimus/actions/workflows/docker-release.yml)
+[![CI](https://github.com/timpara/gridplay/actions/workflows/ci.yml/badge.svg)](https://github.com/timpara/gridplay/actions/workflows/ci.yml)
+[![Docker](https://github.com/timpara/gridplay/actions/workflows/docker-release.yml/badge.svg)](https://github.com/timpara/gridplay/actions/workflows/docker-release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![Release](https://img.shields.io/github/v/release/timpara/Optimus)](https://github.com/timpara/Optimus/releases)
+[![Release](https://img.shields.io/github/v/release/timpara/gridplay)](https://github.com/timpara/gridplay/releases)
 
 > A multiplayer, browser-based educational energy trading game. Students manage
 > a 50 GWh / 10 GW grid battery in Germany and trade on a simulated multi-zone
@@ -46,17 +46,17 @@
 ```bash
 # Public image on GHCR
 docker run --rm -p 8000:8000 \
-  -e OPTIMUS_CLASS_PASSWORD="trade2026" \
-  -e OPTIMUS_ADMIN_KEY="change-me" \
-  -v optimus-data:/data \
-  ghcr.io/timpara/optimus:latest
+  -e GRIDPLAY_CLASS_PASSWORD="trade2026" \
+  -e GRIDPLAY_ADMIN_KEY="change-me" \
+  -v gridplay-data:/data \
+  ghcr.io/timpara/gridplay:latest
 ```
 
 Or with `docker compose` (persists the SQLite DB across restarts):
 
 ```bash
-git clone https://github.com/timpara/Optimus.git
-cd Optimus
+git clone https://github.com/timpara/gridplay.git
+cd gridplay
 cp .env.example .env     # edit secrets
 docker compose up -d
 ```
@@ -68,13 +68,13 @@ Open <http://localhost:8000>.
 Requires Python 3.12+.
 
 ```bash
-git clone https://github.com/timpara/Optimus.git
-cd Optimus
+git clone https://github.com/timpara/gridplay.git
+cd gridplay
 python -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
 
-export OPTIMUS_CLASS_PASSWORD=trade2026
-export OPTIMUS_ADMIN_KEY=dev-admin
+export GRIDPLAY_CLASS_PASSWORD=trade2026
+export GRIDPLAY_ADMIN_KEY=dev-admin
 uvicorn main:app --reload --port 8000
 ```
 
@@ -96,18 +96,21 @@ the full list. The most commonly tuned ones:
 
 | Variable                      | Default              | Purpose                                     |
 | ----------------------------- | -------------------- | ------------------------------------------- |
-| `OPTIMUS_CLASS_PASSWORD`      | *(required)*         | Shared password students enter to join.     |
-| `OPTIMUS_ADMIN_KEY`           | *(required)*         | Secret for `/admin/reset?key=…`.            |
-| `OPTIMUS_TICK_INTERVAL`       | `1.0`                | Real seconds per in-game hour.              |
-| `OPTIMUS_BATTERY_MAX_MWH`     | `50000`              | Battery energy capacity.                    |
-| `OPTIMUS_BATTERY_MAX_MW`      | `10000`              | Max charge/discharge rate per hour.         |
-| `OPTIMUS_STARTING_CASH`       | `0.0`                | Initial cash per player.                    |
-| `OPTIMUS_STARTING_REF_PRICE`  | `45.0`               | Mark-to-market reference price.             |
-| `OPTIMUS_DB_PATH`             | `./battery_trader.db` | SQLite location.                           |
+| `GRIDPLAY_CLASS_PASSWORD`      | *(required)*         | Shared password students enter to join.     |
+| `GRIDPLAY_ADMIN_KEY`           | *(required)*         | Secret for `/admin/*` (sent via `X-Admin-Key` header). |
+| `GRIDPLAY_TICK_INTERVAL`       | `1.0`                | Real seconds per in-game hour.              |
+| `GRIDPLAY_BATTERY_MAX_MWH`     | `50000`              | Battery energy capacity.                    |
+| `GRIDPLAY_BATTERY_MAX_MW`      | `10000`              | Max charge/discharge rate per hour.         |
+| `GRIDPLAY_STARTING_CASH`       | `0.0`                | Initial cash per player.                    |
+| `GRIDPLAY_STARTING_REF_PRICE`  | `45.0`               | Mark-to-market reference price.             |
+| `GRIDPLAY_DB_PATH`             | `./battery_trader.db` | SQLite location.                           |
 
 > **Security note:** starting with v0.2, the server **refuses to boot** if
-> `OPTIMUS_CLASS_PASSWORD` or `OPTIMUS_ADMIN_KEY` is unset. This prevents
-> accidental exposure of a public instance with shipped defaults.
+> `GRIDPLAY_CLASS_PASSWORD` or `GRIDPLAY_ADMIN_KEY` is unset. This prevents
+> accidental exposure of a public instance with shipped defaults. Starting
+> with v0.3, the admin key is read from the `X-Admin-Key` HTTP header (no
+> longer from the URL `?key=…` query parameter), and uvicorn's default access
+> log is disabled to keep credentials out of stdout.
 
 ---
 
@@ -166,7 +169,7 @@ conventions, and PR checklist, and
 [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) for community standards.
 
 Good first issues are tagged
-[`good first issue`](https://github.com/timpara/Optimus/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
+[`good first issue`](https://github.com/timpara/gridplay/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
 
 ## Security
 

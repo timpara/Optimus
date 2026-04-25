@@ -1,5 +1,5 @@
 <!--
-Thank you for contributing to Optimus! Please fill out the sections below so
+Thank you for contributing to gridplay! Please fill out the sections below so
 reviewers can understand and verify your change quickly.
 -->
 

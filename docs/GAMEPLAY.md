@@ -1,14 +1,14 @@
 # Gameplay guide (for instructors)
 
-Optimus is designed for a 60–90 minute classroom session of up to ~40
+gridplay is designed for a 60–90 minute classroom session of up to ~40
 students. This guide outlines a suggested flow.
 
 ## Before class
 
 1. Deploy a server (see [`DEPLOYMENT.md`](DEPLOYMENT.md)). A small cloud VM
    or a laptop on the classroom Wi-Fi is plenty.
-2. Pick a `OPTIMUS_CLASS_PASSWORD` — share it on the board.
-3. Optionally pre-set `OPTIMUS_TICK_INTERVAL=2.0` to give beginners more
+2. Pick a `GRIDPLAY_CLASS_PASSWORD` — share it on the board.
+3. Optionally pre-set `GRIDPLAY_TICK_INTERVAL=2.0` to give beginners more
    breathing room (2 real seconds per in-game hour).
 
 ## Session plan

@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Questions & discussion
-    url: https://github.com/timpara/Optimus/discussions
+    url: https://github.com/timpara/gridplay/discussions
     about: Ask questions, share classroom experiences, or discuss design ideas.
   - name: Security vulnerability
-    url: https://github.com/timpara/Optimus/security/advisories/new
+    url: https://github.com/timpara/gridplay/security/advisories/new
     about: Please report security issues privately, not as public issues.
