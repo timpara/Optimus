@@ -36,7 +36,7 @@ classifiers = [
 ]
 dependencies = [
     "fastapi>=0.136.1",
-    "uvicorn[standard]>=0.34",
+    "uvicorn[standard]>=0.46.0",
     "aiosqlite>=0.21",
 ]
 
