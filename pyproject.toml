@@ -37,7 +37,7 @@ classifiers = [
 dependencies = [
     "fastapi>=0.136.1",
     "uvicorn[standard]>=0.34",
-    "aiosqlite>=0.21",
+    "aiosqlite>=0.22.1",
 ]
 
 [project.optional-dependencies]
